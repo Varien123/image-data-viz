@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>混元数据管理平台 · 数据可视化分析</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}
+.header{background:linear-gradient(135deg,#1e3a5f 0%,#1d4ed8 100%);color:#fff;padding:14px 28px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(0,0,0,.25);position:sticky;top:0;z-index:200}
+.header-left h1{font-size:17px;font-weight:700}.header-left p{font-size:12px;opacity:.7;margin-top:2px}
+.upload-area{display:flex;align-items:center;gap:12px}
+.file-label{font-size:12px;opacity:.75;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn-upload{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);color:#fff;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;transition:background .2s;white-space:nowrap}
+.btn-upload:hover{background:rgba(255,255,255,.28)}
+.tabs{background:#fff;border-bottom:2px solid #e8edf5;padding:0 28px;display:flex;position:sticky;top:56px;z-index:100}
+.tab-btn{padding:14px 22px;font-size:14px;cursor:pointer;border:none;background:none;color:#64748b;border-bottom:3px solid transparent;margin-bottom:-2px;font-weight:500;transition:all .2s}
+.tab-btn.active{color:#1d4ed8;border-bottom-color:#1d4ed8;font-weight:700}
+.tab-btn:hover:not(.active){color:#334155}
+.page{padding:24px 28px;max-width:1480px;margin:0 auto}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.card{background:#fff;border-radius:14px;padding:22px;box-shadow:0 1px 4px rgba(0,0,0,.07);margin-bottom:20px}
+.card-title{font-size:15px;font-weight:700;color:#1e293b;margin-bottom:18px;display:flex;align-items:center;gap:8px}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+.stat-card{background:#fff;border-radius:14px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-left:4px solid #1d4ed8}
+.stat-label{font-size:12px;color:#64748b;font-weight:500;margin-bottom:6px}
+.stat-value{font-size:30px;font-weight:800;color:#1e293b;line-height:1}
+.stat-sub{font-size:11px;color:#94a3b8;margin-top:5px}
+/* Type toggle */
+.type-toggle{display:flex;background:#f1f5f9;border-radius:8px;padding:3px;gap:2px}
+.type-btn{padding:6px 16px;border-radius:6px;border:none;cursor:pointer;font-size:13px;font-weight:500;color:#64748b;background:transparent;transition:all .2s}
+.type-btn.active{background:#fff;color:#1d4ed8;box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:700}
+/* Quality overview */
+.qov-top{display:flex;gap:28px;margin-bottom:18px}
+.qov-stat{text-align:center;min-width:110px}
+.qov-stat-val{font-size:26px;font-weight:800;color:#1e293b}
+.qov-stat-lbl{font-size:12px;color:#64748b;margin-top:3px}
+.qov-body{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+.radar-wrap{height:290px;position:relative}
+.tier-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9;flex-wrap:wrap}
+.tier-row:last-child{border-bottom:none}
+.tier-nums{display:flex;gap:14px;flex:1;flex-wrap:wrap}
+.tier-num{text-align:center;min-width:50px}
+.tier-num-val{font-size:14px;font-weight:700;color:#1e293b}
+.tier-num-lbl{font-size:10px;color:#94a3b8;margin-top:2px}
+.tier-detail-link{font-size:12px;color:#1d4ed8;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.tier-detail-link:hover{text-decoration:underline}
+/* Tables */
+.table-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:#f8fafc;padding:10px 14px;text-align:left;font-weight:600;color:#475569;border-bottom:2px solid #e2e8f0;white-space:nowrap}
+thead th.sortable{cursor:pointer;user-select:none}
+thead th.sortable:hover{background:#f1f5f9}
+tbody td{padding:9px 14px;border-bottom:1px solid #f1f5f9;color:#334155;vertical-align:middle}
+tbody tr:hover td{background:#fafbff}
+.pill{display:inline-block;padding:2px 9px;border-radius:12px;font-size:12px;font-weight:600}
+.pill-high{background:#dcfce7;color:#16a34a}.pill-med{background:#fef3c7;color:#d97706}.pill-low{background:#fee2e2;color:#dc2626}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.dot-high{background:#16a34a}.dot-med{background:#d97706}.dot-low{background:#dc2626}
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid #e2e8f0;background:#fff;color:#334155;transition:all .15s;font-weight:500;white-space:nowrap}
+.btn:hover{background:#f1f5f9}
+.btn-sm{padding:5px 10px;font-size:12px}
+/* Export dropdown */
+.export-wrap{position:relative;display:inline-block}
+.export-dd{display:none;position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:50;min-width:120px;overflow:hidden}
+.export-dd.open{display:block}
+.export-opt{display:block;width:100%;padding:9px 16px;font-size:13px;color:#334155;cursor:pointer;border:none;background:none;text-align:left;white-space:nowrap}
+.export-opt:hover{background:#f8fafc}
+/* Search / select */
+.search-input{padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;color:#334155;width:240px;outline:none;transition:border .2s}
+.search-input:focus{border-color:#1d4ed8}
+select{padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;color:#334155;background:#fff;min-width:220px;outline:none}
+select:focus{border-color:#1d4ed8}
+label{font-size:13px;color:#475569;font-weight:500}
+/* Pagination */
+.pagination{display:flex;justify-content:center;align-items:center;gap:5px;margin-top:14px;flex-wrap:wrap}
+.pg{padding:5px 11px;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:12px;background:#fff;color:#475569}
+.pg:hover:not(.pg-active){background:#f1f5f9}
+.pg-active{background:#1d4ed8;color:#fff;border-color:#1d4ed8}
+.pg-info{font-size:12px;color:#94a3b8;margin:0 8px}
+/* Section heads */
+.section-head{font-size:14px;font-weight:700;color:#334155;margin:24px 0 14px;padding-left:10px;border-left:3px solid #1d4ed8}
+/* Pie charts */
+.pie-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.pie-box{position:relative}
+.pie-label{font-size:13px;font-weight:600;color:#475569;margin-bottom:8px;text-align:center}
+.pie-h{height:210px}
+/* Filter panel */
+.filter-panel{display:none;flex-wrap:wrap;gap:10px;padding:12px 14px;background:#f8fafc;border-radius:8px;margin-bottom:12px;align-items:flex-end;border:1px solid #e2e8f0}
+.filter-panel.open{display:flex}
+.sf-num{padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;outline:none;width:90px}
+.btn-active{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
+/* Low quality accordion */
+.lq-section{border:1px solid #e2e8f0;border-radius:10px;margin-bottom:10px;overflow:hidden}
+.lq-sec-hdr{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#f8fafc;cursor:pointer;user-select:none}
+.lq-sec-hdr:hover{background:#f1f5f9}
+.lq-sec-title{font-weight:600;font-size:14px;color:#334155;display:flex;align-items:center;gap:10px}
+.lq-sec-body{padding:16px;display:none}
+.lq-sec-body.open{display:block}
+.lq-level-block{margin-bottom:16px}
+.lq-level-hdr{font-size:13px;font-weight:600;color:#475569;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.lq-tag-item{margin-bottom:10px;padding:8px;background:#fafbff;border-radius:6px}
+.lq-tag-hdr{display:flex;justify-content:space-between;font-size:12px;color:#334155;margin-bottom:6px}
+.lq-tag-cnt{color:#94a3b8;font-size:11px}
+.lq-img-strip{display:flex;flex-wrap:wrap;gap:5px}
+.lq-thumb{width:68px;height:50px;object-fit:cover;border-radius:4px;cursor:pointer;border:1px solid #e2e8f0;background:#f1f5f9;transition:transform .15s;flex-shrink:0}
+.lq-thumb:hover{transform:scale(1.08)}
+/* Image mini grid */
+.img-mini-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.img-mini{width:130px;height:96px;object-fit:cover;border-radius:6px;cursor:pointer;border:1px solid #e2e8f0;background:#f1f5f9;transition:all .18s;flex-shrink:0}
+.img-mini:hover{transform:scale(1.03);box-shadow:0 3px 10px rgba(0,0,0,.15)}
+/* Image detail overlay */
+.img-overlay{display:none;position:fixed;inset:0;background:#f0f2f5;z-index:300;overflow-y:auto}
+.img-overlay.open{display:block}
+.img-ov-hdr{background:#fff;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:10;gap:12px;flex-wrap:wrap}
+.img-ov-title{font-size:15px;font-weight:700;color:#1e293b;flex-shrink:0}
+.filter-tabs-row{display:flex}
+.filter-tab{padding:7px 18px;font-size:13px;cursor:pointer;border:1px solid #e2e8f0;background:#fff;color:#64748b;font-weight:500;transition:all .18s;margin-right:-1px}
+.filter-tab:first-child{border-radius:8px 0 0 8px}.filter-tab:last-child{border-radius:0 8px 8px 0}
+.filter-tab.active{background:#1d4ed8;color:#fff;border-color:#1d4ed8;z-index:1;position:relative}
+.img-ov-body{padding:20px 24px;max-width:1480px;margin:0 auto}
+.score-filters-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;padding:14px;background:#fff;border-radius:10px;border:1px solid #e2e8f0;align-items:flex-end}
+.sf-item{display:flex;flex-direction:column;gap:3px}
+.sf-lbl{font-size:11px;color:#64748b}
+.sf-sel{padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;outline:none}
+.img-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px}
+.img-card{border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.07);cursor:pointer;transition:all .18s}
+.img-card:hover{transform:translateY(-2px);box-shadow:0 5px 14px rgba(0,0,0,.12)}
+.img-card img{width:100%;height:115px;object-fit:cover;display:block;background:#f1f5f9}
+.img-card-meta{padding:7px 9px}
+.img-card-score{font-size:12px;font-weight:600;color:#334155}
+.img-card-sid{font-size:10px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+/* Image info panel */
+.img-info-pnl{display:none;position:fixed;right:0;top:0;bottom:0;width:280px;background:#fff;box-shadow:-4px 0 20px rgba(0,0,0,.12);z-index:315;overflow-y:auto;padding:16px}
+.img-info-pnl.open{display:block}
+.img-info-close{background:none;border:none;cursor:pointer;font-size:18px;color:#94a3b8;float:right}
+.img-info-preview{width:100%;height:155px;object-fit:cover;border-radius:8px;margin-bottom:14px;background:#f1f5f9;display:block;cursor:pointer}
+.img-info-ttl{font-size:14px;font-weight:700;color:#1e293b;margin-bottom:10px;clear:both}
+.img-info-row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;gap:8px}
+.img-info-key{color:#94a3b8;flex-shrink:0}
+.img-info-val{color:#334155;text-align:right;word-break:break-all}
+.score-chips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
+.score-chip{padding:2px 8px;border-radius:8px;font-size:12px;font-weight:600}
+.tag-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.tag-chip{background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:10px;font-size:11px}
+/* Lightbox */
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:400;align-items:center;justify-content:center}
+.lightbox.open{display:flex}
+.lb-img{max-width:90vw;max-height:85vh;object-fit:contain;border-radius:6px}
+.lb-close{position:absolute;top:16px;right:24px;color:#fff;font-size:30px;cursor:pointer;background:none;border:none;opacity:.8;line-height:1}
+.lb-close:hover{opacity:1}
+/* Modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;overflow-y:auto}
+.modal-bg.open{display:flex;justify-content:center;align-items:flex-start;padding:48px 20px}
+.modal{background:#fff;border-radius:16px;max-width:960px;width:100%;padding:28px;max-height:80vh;overflow-y:auto}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.modal-head h2{font-size:17px;font-weight:700}
+.modal-close{background:none;border:none;cursor:pointer;font-size:22px;color:#94a3b8;line-height:1;padding:0 4px}
+.modal-close:hover{color:#475569}
+/* Loading */
+.loading-bg{display:none;position:fixed;inset:0;background:rgba(255,255,255,.85);z-index:600;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.loading-bg.open{display:flex}
+.spinner{width:44px;height:44px;border:4px solid #e2e8f0;border-top-color:#1d4ed8;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-txt{font-size:14px;color:#475569}
+/* Empty state */
+.empty{text-align:center;padding:80px 24px;color:#94a3b8}
+.empty-icon{font-size:52px;margin-bottom:16px}
+.empty-title{font-size:17px;font-weight:600;color:#64748b;margin-bottom:8px}
+.empty-desc{font-size:13px}
+/* Responsive */
+@media(max-width:900px){
+  .stats-row{grid-template-columns:repeat(2,1fr)}
+  .qov-body{grid-template-columns:1fr}
+  .pie-grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div class="loading-bg" id="loadingBg">
+  <div class="spinner"></div>
+  <div class="loading-txt">正在解析数据，请稍候…</div>
+</div>
+
+<!-- Modal (tier list) -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal" id="modalBody"></div>
+</div>
+
+<!-- Image detail overlay -->
+<div class="img-overlay" id="imgOverlay">
+  <div class="img-ov-hdr">
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn" onclick="closeImgDetail()">← 返回</button>
+      <div class="img-ov-title" id="imgOvTitle">图片详情</div>
+    </div>
+    <div class="filter-tabs-row">
+      <button class="filter-tab active" id="filterTab-all" onclick="setImgTab('all')">全量数据</button>
+      <button class="filter-tab" id="filterTab-reviewed" onclick="setImgTab('reviewed')">已质检</button>
+      <button class="filter-tab" id="filterTab-unreviewed" onclick="setImgTab('unreviewed')">未质检</button>
+    </div>
+    <div></div>
+  </div>
+  <div class="img-ov-body">
+    <div id="imgScoreFiltersBar"></div>
+    <div id="imgGridWrap"></div>
+    <div id="imgPagerWrap"></div>
+  </div>
+</div>
+
+<!-- Image info panel -->
+<div class="img-info-pnl" id="imgInfoPnl">
+  <button class="img-info-close" onclick="closeImgInfo()">✕</button>
+  <div id="imgInfoContent"></div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lb-close" onclick="closeLightbox()">✕</button>
+  <img class="lb-img" id="lbImg" src="" alt="">
+</div>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <h1>混元数据管理平台</h1>
+    <p>数据可视化分析 · 质量评估系统</p>
+  </div>
+  <div class="upload-area">
+    <span class="file-label" id="fileLabel">未上传数据文件</span>
+    <button class="btn-upload" onclick="document.getElementById('fileInput').click()">
+      📂 上传数据文件 (CSV / XLSX)
+    </button>
+    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none">
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn active" id="tab-btn-overview" onclick="switchTab('overview')">📊 数据总览</button>
+  <button class="tab-btn" id="tab-btn-sites" onclick="switchTab('sites')">🏪 各站点数据详情</button>
+  <button class="tab-btn" id="tab-btn-batches" onclick="switchTab('batches')">📦 各批次数据详情</button>
+</div>
+
+<div class="page">
+
+  <!-- OVERVIEW -->
+  <div class="tab-panel active" id="panel-overview">
+    <div class="empty" id="overviewEmpty">
+      <div class="empty-icon">📊</div>
+      <div class="empty-title">请上传数据文件以开始分析</div>
+      <div class="empty-desc">支持 CSV 或 XLSX 格式，文件需包含清晰度、内容质量、美学质量等评分列</div>
+    </div>
+    <div id="overviewMain" style="display:none">
+      <div class="stats-row" id="summaryCards"></div>
+      <!-- Quality Overview Card -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+          <div class="card-title" style="margin-bottom:0">📊 数据源质量总览</div>
+          <div class="type-toggle">
+            <button class="type-btn" id="typeBtnSite" onclick="setQualityViewType('site')">按站点</button>
+            <button class="type-btn active" id="typeBtnBatch" onclick="setQualityViewType('batch')">按数据批次</button>
+          </div>
+        </div>
+        <div id="qualityOverviewBody"></div>
+      </div>
+      <!-- Site ranking -->
+      <div class="card">
+        <div class="card-title">🏪 数据站点 · 质量分析排行</div>
+        <div class="table-toolbar">
+          <input class="search-input" id="siteSearch" placeholder="搜索站点名称…" oninput="sitePage=1;renderSiteTable()">
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="white-space:nowrap">排序维度：</label>
+            <select id="siteSortDimSel" onchange="setSiteSortDim(this.value)" style="min-width:120px">
+              <option value="qualityScore">综合质量分</option>
+              <option value="aAvg">清晰度</option>
+              <option value="bAvg">内容质量</option>
+              <option value="cAvg">美学质量</option>
+            </select>
+          </div>
+          <div class="export-wrap">
+            <button class="btn" onclick="toggleExportDd('site')">⬇ 导出结果 ▾</button>
+            <div class="export-dd" id="exportDd-site">
+              <button class="export-opt" onclick="exportData('site','csv');closeExportDds()">导出 CSV</button>
+              <button class="export-opt" onclick="exportData('site','xlsx');closeExportDds()">导出 XLSX</button>
+            </div>
+          </div>
+        </div>
+        <div class="table-wrap" id="siteTableWrap"></div>
+        <div id="sitePager"></div>
+      </div>
+      <!-- Batch ranking -->
+      <div class="card">
+        <div class="card-title">📦 数据批次 · 质量分析排行</div>
+        <div class="table-toolbar">
+          <input class="search-input" id="batchSearch" placeholder="搜索批次 ID 或站点…" oninput="batchPage=1;renderBatchTable()">
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="white-space:nowrap">排序维度：</label>
+            <select id="batchSortDimSel" onchange="setBatchSortDim(this.value)" style="min-width:120px">
+              <option value="qualityScore">综合质量分</option>
+              <option value="aAvg">清晰度</option>
+              <option value="bAvg">内容质量</option>
+              <option value="cAvg">美学质量</option>
+            </select>
+          </div>
+          <div class="export-wrap">
+            <button class="btn" onclick="toggleExportDd('batch')">⬇ 导出结果 ▾</button>
+            <div class="export-dd" id="exportDd-batch">
+              <button class="export-opt" onclick="exportData('batch','csv');closeExportDds()">导出 CSV</button>
+              <button class="export-opt" onclick="exportData('batch','xlsx');closeExportDds()">导出 XLSX</button>
+            </div>
+          </div>
+        </div>
+        <div class="table-wrap" id="batchTableWrap"></div>
+        <div id="batchPager"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SITES -->
+  <div class="tab-panel" id="panel-sites">
+    <div class="empty" id="sitesEmpty">
+      <div class="empty-icon">🏪</div>
+      <div class="empty-title">请先上传数据文件</div>
+      <div class="empty-desc">上传数据后可查看各站点详细分析</div>
+    </div>
+    <div id="sitesMain" style="display:none">
+      <div id="sitesListView">
+        <div class="card">
+          <div class="card-title">🏪 各站点数据详情</div>
+          <div class="table-toolbar">
+            <input class="search-input" id="siteListSearch" placeholder="搜索站点名称…" oninput="siteListPage=1;renderSitesList()">
+            <button class="btn" id="siteFilterBtn" onclick="toggleListFilter('site')">筛选 ▾</button>
+          </div>
+          <div class="filter-panel" id="siteFilterPanel"></div>
+          <div class="table-wrap" id="sitesListWrap"></div>
+          <div id="sitesListPager"></div>
+        </div>
+      </div>
+      <div id="sitesDetailView" style="display:none">
+        <div class="card" style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:14px">
+            <button class="btn" onclick="showSitesList()">← 返回列表</button>
+            <span id="sitesDetailTitle" style="font-size:15px;font-weight:700;color:#1e293b"></span>
+          </div>
+        </div>
+        <div id="siteDetailArea"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BATCHES -->
+  <div class="tab-panel" id="panel-batches">
+    <div class="empty" id="batchesEmpty">
+      <div class="empty-icon">📦</div>
+      <div class="empty-title">请先上传数据文件</div>
+      <div class="empty-desc">上传数据后可查看各批次详细分析</div>
+    </div>
+    <div id="batchesMain" style="display:none">
+      <div id="batchesListView">
+        <div class="card">
+          <div class="card-title">📦 各批次数据详情</div>
+          <div class="table-toolbar">
+            <input class="search-input" id="batchListSearch" placeholder="搜索批次 ID 或站点…" oninput="batchListPage=1;renderBatchesList()">
+            <button class="btn" id="batchFilterBtn" onclick="toggleListFilter('batch')">筛选 ▾</button>
+          </div>
+          <div class="filter-panel" id="batchFilterPanel"></div>
+          <div class="table-wrap" id="batchesListWrap"></div>
+          <div id="batchesListPager"></div>
+        </div>
+      </div>
+      <div id="batchesDetailView" style="display:none">
+        <div class="card" style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:14px">
+            <button class="btn" onclick="showBatchesList()">← 返回列表</button>
+            <span id="batchesDetailTitle" style="font-size:15px;font-weight:700;color:#1e293b"></span>
+          </div>
+        </div>
+        <div id="batchDetailArea"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ══ CONSTANTS ══
+const BLACKLIST = new Set([
+  '21002061i001','21001050i001','21002156i001','21002043i001',
+  '21002036i001','21002155i001','51002076i001','21002037i001',
+  '11000012i001','11001042i001','21002224i001','21002564i001','12000304i001'
+]);
+const SCORE_LEVELS = [1,2,2.5,3,3.5,4,5];
+const SCORE_COLORS = {1:'#ef4444',2:'#f97316',2.5:'#f59e0b',3:'#84cc16',3.5:'#22c55e',4:'#14b8a6',5:'#6366f1'};
+
+// ══ STATE ══
+let batchStats={}, siteStats={}, totalRows=0;
+let sitePage=1, siteSortKey='qualityScore', siteSortDir=-1;
+let batchPage=1, batchSortKey='qualityScore', batchSortDir=-1;
+let siteListPage=1, batchListPage=1;
+const PAGE_SIZE=20;
+let qualityViewType='batch';
+let imgDetailState={type:null,id:null,tab:'all',filters:{S:null,A:null,B:null,C:null},page:1};
+let currentImgRecords=[];
+const chartInstances={};
+
+// ══ CHART PLUGINS ══
+Chart.register({
+  id:'centerText',
+  afterDraw(chart){
+    const opts=chart.config.options?.plugins?.centerText;
+    if(!opts?.text) return;
+    let cx,cy;
+    if(chart.config.type==='radar'&&chart.scales?.r){cx=chart.scales.r.xCenter;cy=chart.scales.r.yCenter;}
+    else if(chart.config.type==='doughnut'){const ca=chart.chartArea;cx=(ca.left+ca.right)/2;cy=(ca.top+ca.bottom)/2;}
+    else return;
+    const{ctx}=chart;
+    ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font=`bold ${opts.sz||15}px -apple-system,sans-serif`;
+    ctx.fillStyle=opts.color||'#1e293b';
+    ctx.fillText(opts.text,cx,opts.sub?cy-8:cy);
+    if(opts.sub){ctx.font=`${opts.subSz||10}px -apple-system,sans-serif`;ctx.fillStyle='#94a3b8';ctx.fillText(opts.sub,cx,cy+9);}
+    ctx.restore();
+  }
+});
+
+// ══ SCORE UTILS ══
+function parseScore(v){
+  if(v==null||v==='null'||v==='None'||v==='') return null;
+  const m=String(v).match(/^([\d.]+)/);return m?parseFloat(m[1]):null;
+}
+function calcS(A,B,C){
+  if(A===null||B===null||C===null) return null;
+  const c=[];
+  if(A===1||B===1||C===1) c.push(1);
+  if((A===2||B===2)&&A!==1&&B!==1&&C>=2) c.push(2);
+  if((A===2.5||B===2.5)&&A!==1&&B!==1&&A!==2&&B!==2&&C>=2) c.push(2.5);
+  if(A>=3&&B>=3&&C>=2) c.push(3);
+  if(A>=3&&B>=3&&C>=3) c.push(3.5);
+  if(A>=3.5&&B>=3.5&&C>=4) c.push(4);
+  if(A>=4&&B>=4&&C>=4&&Math.max(A,B,C)>=5) c.push(5);
+  return c.length?Math.max(...c):null;
+}
+function tier(s){if(s===null)return 'unknown';if(s>=3.5)return 'high';if(s>=3)return 'med';return 'low';}
+const TIER_LABEL={high:'高质',med:'中质',low:'低质',unknown:'未知'};
+const TIER_CLASS={high:'pill-high',med:'pill-med',low:'pill-low',unknown:'pill-low'};
+const DOT_CLASS={high:'dot-high',med:'dot-med',low:'dot-low',unknown:'dot-low'};
+function fmt(n,d=2){if(n==null||isNaN(n))return '—';return Number(n).toFixed(d);}
+
+// ══ COLUMN MAPPING ══
+function findCol(hs,cands){
+  const lh=hs.map(h=>(h||'').toString().toLowerCase().trim());
+  for(const c of cands){const i=lh.indexOf(c.toLowerCase());if(i>=0)return i;}
+  for(const c of cands){const i=lh.findIndex(h=>h.includes(c.toLowerCase()));if(i>=0)return i;}
+  return -1;
+}
+function mapCols(hs){return{
+  source_id:findCol(hs,['input.source_id','source_id','数据源id','批次id']),
+  site:findCol(hs,['站点','site']),
+  url:findCol(hs,['input.url_cos','url_cos','url','图片链接']),
+  A:findCol(hs,['output.画面质量-清晰度','清晰度']),
+  B:findCol(hs,['output.画面质量-内容质量分','内容质量分','内容质量']),
+  C:findCol(hs,['output.画面质量-美学质量分','美学质量分','美学质量']),
+  A1t:findCol(hs,['output.1分-极低清图片']),
+  A2t:findCol(hs,['output.2分-低清图片']),
+  A25t:findCol(hs,['output.2.5分-较低清晰度']),
+  B1t:findCol(hs,['output.1分-严重的基础质量问题']),
+  B2t:findCol(hs,['output.2分-画面内容存在缺陷']),
+  B25t:findCol(hs,['output.2.5分-画面内容存在瑕疵']),
+  C1t:findCol(hs,['output.1分-画面无美感','output.1分-画面无美感，存在明显 bug']),
+  C2t:findCol(hs,['output.2分-画面美感较差，无观赏性','output.2分-画面美感较差']),
+  C25t:findCol(hs,['output.2.5分-画面美感稍差']),
+};}
+
+// ══ DATA PROCESSING ══
+function tparts(v){
+  if(!v||v==='null'||v==='None') return [];
+  return String(v).split(/[;；]/).map(s=>s.trim()).filter(Boolean);
+}
+function newAgg(id,extra={}){
+  return{id,count:0,scoreSum:0,validCount:0,
+    sDist:{},aDist:{},bDist:{},cDist:{},
+    aSum:0,bSum:0,cSum:0,aVC:0,bVC:0,cVC:0,
+    tagsByDimLevel:{A1:{},A2:{},A25:{},B1:{},B2:{},B25:{},C1:{},C2:{},C25:{}},
+    records:[],...extra};
+}
+function addToAgg(agg,rec,store=true){
+  agg.count++;
+  if(store) agg.records.push(rec);
+  const{A,B,C,S}=rec;
+  if(A!=null){agg.aDist[A]=(agg.aDist[A]||0)+1;agg.aSum+=A;agg.aVC++;}
+  if(B!=null){agg.bDist[B]=(agg.bDist[B]||0)+1;agg.bSum+=B;agg.bVC++;}
+  if(C!=null){agg.cDist[C]=(agg.cDist[C]||0)+1;agg.cSum+=C;agg.cVC++;}
+  if(S!=null){agg.sDist[S]=(agg.sDist[S]||0)+1;agg.scoreSum+=S;agg.validCount++;}
+  for(const[k,tags]of[['A1',rec.A1t],['A2',rec.A2t],['A25',rec.A25t],
+    ['B1',rec.B1t],['B2',rec.B2t],['B25',rec.B25t],
+    ['C1',rec.C1t],['C2',rec.C2t],['C25',rec.C25t]]){
+    for(const t of tags) agg.tagsByDimLevel[k][t]=(agg.tagsByDimLevel[k][t]||0)+1;
+  }
+}
+function finaliseAgg(agg){
+  agg.qualityScore=agg.validCount?agg.scoreSum/agg.validCount:null;
+  agg.qualityTier=tier(agg.qualityScore);
+  agg.aAvg=agg.aVC?agg.aSum/agg.aVC:null;
+  agg.bAvg=agg.bVC?agg.bSum/agg.bVC:null;
+  agg.cAvg=agg.cVC?agg.cSum/agg.cVC:null;
+}
+function processRows(rows){
+  if(!rows||rows.length<2) return false;
+  const headers=rows[0].map(h=>(h||'').toString().trim());
+  const cm=mapCols(headers);
+  if(cm.A<0||cm.B<0||cm.C<0){alert('未找到清晰度/内容质量/美学质量列，请检查文件格式。');return false;}
+  batchStats={};siteStats={};totalRows=0;
+  for(let i=1;i<rows.length;i++){
+    const r=rows[i];
+    if(!r||r.every(c=>!c)) continue;
+    totalRows++;
+    const g=idx=>idx>=0?r[idx]:null;
+    let sid=g(cm.source_id);
+    if(sid) sid=String(sid).replace(/\t/g,'').trim();
+    const site=g(cm.site)?String(g(cm.site)).trim():'unknown';
+    const url=g(cm.url)?String(g(cm.url)).trim():null;
+    const A=parseScore(g(cm.A)),B=parseScore(g(cm.B)),C=parseScore(g(cm.C));
+    const S=calcS(A,B,C);
+    const rec={sid,site,url,A,B,C,S,isReviewed:A!==null&&B!==null&&C!==null,
+      A1t:tparts(g(cm.A1t)),A2t:tparts(g(cm.A2t)),A25t:tparts(g(cm.A25t)),
+      B1t:tparts(g(cm.B1t)),B2t:tparts(g(cm.B2t)),B25t:tparts(g(cm.B25t)),
+      C1t:tparts(g(cm.C1t)),C2t:tparts(g(cm.C2t)),C25t:tparts(g(cm.C25t))};
+    if(site){if(!siteStats[site])siteStats[site]=newAgg(site);addToAgg(siteStats[site],rec,false);}
+    if(sid&&!BLACKLIST.has(sid)){if(!batchStats[sid])batchStats[sid]=newAgg(sid,{site});addToAgg(batchStats[sid],rec,true);}
+  }
+  Object.values(batchStats).forEach(finaliseAgg);
+  Object.values(siteStats).forEach(finaliseAgg);
+  return true;
+}
+
+// ══ FILE UPLOAD ══
+document.getElementById('fileInput').addEventListener('change',async function(e){
+  const file=e.target.files[0];if(!file)return;
+  showLoading(true);document.getElementById('fileLabel').textContent=file.name;
+  try{
+    const rows=/\.(xlsx|xls)$/i.test(file.name)?await readXLSX(file):await readCSV(file);
+    if(processRows(rows)) renderAll();
+  }catch(err){console.error(err);alert('文件解析失败：'+err.message);}
+  showLoading(false);e.target.value='';
+});
+function readXLSX(file){return new Promise((res,rej)=>{
+  const fr=new FileReader();
+  fr.onload=e=>{try{const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+    res(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:null}));}catch(err){rej(err);}};
+  fr.onerror=rej;fr.readAsArrayBuffer(file);});}
+function readCSV(file){return new Promise((res,rej)=>{
+  const fr=new FileReader();
+  fr.onload=e=>{try{const rows=[];
+    for(const line of e.target.result.split('\n')){
+      const row=[];let cur='',inQ=false;
+      for(const ch of line){if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){row.push(cur);cur='';}else cur+=ch;}
+      row.push(cur.replace(/\r$/,''));rows.push(row);}
+    res(rows.filter(r=>r.length>1));}catch(err){rej(err);}};
+  fr.onerror=rej;fr.readAsText(file,'UTF-8');});}
+
+// ══ RENDER ALL ══
+function renderAll(){
+  renderOverview();renderSitesTab();renderBatchesTab();
+  ['overview','sites','batches'].forEach(t=>{
+    document.getElementById(t+'Empty').style.display='none';
+    document.getElementById(t+'Main').style.display='block';
+  });
+}
+
+// ══ OVERVIEW ══
+function renderOverview(){
+  const batches=Object.values(batchStats),sites=Object.values(siteStats);
+  const bQs=batches.map(b=>b.qualityScore).filter(v=>v!=null);
+  const overallQ=bQs.length?bQs.reduce((a,b)=>a+b,0)/bQs.length:null;
+  document.getElementById('summaryCards').innerHTML=`
+    <div class="stat-card"><div class="stat-label">数据批次总数</div><div class="stat-value">${batches.length}</div><div class="stat-sub">已剔除黑名单批次</div></div>
+    <div class="stat-card"><div class="stat-label">图片总数</div><div class="stat-value">${totalRows.toLocaleString()}</div><div class="stat-sub">全量上传数据</div></div>
+    <div class="stat-card"><div class="stat-label">站点总数</div><div class="stat-value">${sites.length}</div><div class="stat-sub">包含数据的站点</div></div>
+    <div class="stat-card" style="border-left-color:${overallQ>=3.5?'#16a34a':overallQ>=3?'#d97706':'#dc2626'}">
+      <div class="stat-label">整体质量分</div>
+      <div class="stat-value" style="color:${overallQ>=3.5?'#16a34a':overallQ>=3?'#d97706':'#dc2626'}">${fmt(overallQ)}</div>
+      <div class="stat-sub">所有批次平均质量分</div></div>`;
+  renderQualityOverview(qualityViewType);
+  renderSiteTable();renderBatchTable();
+}
+
+function setQualityViewType(t){
+  qualityViewType=t;
+  document.getElementById('typeBtnSite').classList.toggle('active',t==='site');
+  document.getElementById('typeBtnBatch').classList.toggle('active',t==='batch');
+  renderQualityOverview(t);
+}
+
+function renderQualityOverview(t){
+  const entities=Object.values(t==='site'?siteStats:batchStats);
+  const typeName=t==='site'?'站点':'数据批次';
+  const covered=entities.filter(e=>e.validCount>0);
+  const uncovered=entities.length-covered.length;
+  const pct=entities.length?covered.length/entities.length*100:0;
+  const allQs=covered.map(e=>e.qualityScore).filter(v=>v!=null);
+  const totalQ=allQs.length?allQs.reduce((a,b)=>a+b,0)/allQs.length:null;
+  const covA=covered.filter(e=>e.aVC>0),covB=covered.filter(e=>e.bVC>0),covC=covered.filter(e=>e.cVC>0);
+  const aAvg=covA.length?covA.reduce((s,e)=>s+e.aAvg,0)/covA.length:0;
+  const bAvg=covB.length?covB.reduce((s,e)=>s+e.bAvg,0)/covB.length:0;
+  const cAvg=covC.length?covC.reduce((s,e)=>s+e.cAvg,0)/covC.length:0;
+
+  const tierRows=['high','med','low'].map(tr=>{
+    const items=covered.filter(e=>e.qualityTier===tr);
+    const cnt=items.length;
+    const tpct=covered.length?cnt/covered.length*100:0;
+    const tQ=cnt?items.reduce((s,e)=>s+e.qualityScore,0)/cnt:null;
+    const itA=items.filter(e=>e.aVC>0),itB=items.filter(e=>e.bVC>0),itC=items.filter(e=>e.cVC>0);
+    const tA=itA.length?itA.reduce((s,e)=>s+e.aAvg,0)/itA.length:null;
+    const tB=itB.length?itB.reduce((s,e)=>s+e.bAvg,0)/itB.length:null;
+    const tC=itC.length?itC.reduce((s,e)=>s+e.cAvg,0)/itC.length:null;
+    const bg={high:'#dcfce7',med:'#fef3c7',low:'#fee2e2'}[tr];
+    const tc={high:'#16a34a',med:'#d97706',low:'#dc2626'}[tr];
+    return`<div class="tier-row">
+      <span style="display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700;background:${bg};color:${tc};flex-shrink:0">${TIER_LABEL[tr]}</span>
+      <div class="tier-nums">
+        <div class="tier-num"><div class="tier-num-val">${cnt}</div><div class="tier-num-lbl">个数</div></div>
+        <div class="tier-num"><div class="tier-num-val">${fmt(tpct,1)}%</div><div class="tier-num-lbl">占比</div></div>
+        <div class="tier-num"><div class="tier-num-val">${fmt(tQ)}</div><div class="tier-num-lbl">质量分</div></div>
+        <div class="tier-num"><div class="tier-num-val">${fmt(tA)}</div><div class="tier-num-lbl">清晰度</div></div>
+        <div class="tier-num"><div class="tier-num-val">${fmt(tB)}</div><div class="tier-num-lbl">内容质量</div></div>
+        <div class="tier-num"><div class="tier-num-val">${fmt(tC)}</div><div class="tier-num-lbl">美学质量</div></div>
+      </div>
+      <a class="tier-detail-link" onclick="showTierModal('${tr}','${t}')">查看${TIER_LABEL[tr]}${typeName}详情</a>
+    </div>`;
+  }).join('');
+
+  document.getElementById('qualityOverviewBody').innerHTML=`
+    <div class="qov-top">
+      <div class="qov-stat">
+        <div class="qov-stat-val">${entities.length}</div>
+        <div class="qov-stat-lbl">${typeName}总数</div>
+      </div>
+      <div class="qov-stat">
+        <div class="qov-stat-val" style="color:${totalQ>=3.5?'#16a34a':totalQ>=3?'#d97706':'#dc2626'}">${fmt(totalQ)}</div>
+        <div class="qov-stat-lbl">${typeName}总质量分</div>
+      </div>
+    </div>
+    <div class="qov-body">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:#475569;margin-bottom:10px">各维度平均得分</div>
+        <div class="radar-wrap"><canvas id="radarChart"></canvas></div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:#64748b;margin-bottom:14px;line-height:1.6">
+          当前质检已覆盖 <b>${covered.length}</b> 个${typeName}（占 <b>${fmt(pct,2)}%</b>），尚有 <b>${uncovered}</b> 个${typeName}因未评分，暂未纳入分析
+        </div>
+        ${tierRows}
+      </div>
+    </div>`;
+
+  setTimeout(()=>{
+    destroyChart('radarChart');
+    const el=document.getElementById('radarChart');
+    if(!el) return;
+    const radarDimVals=[aAvg,bAvg,cAvg];
+    chartInstances['radarChart']=new Chart(el,{
+      type:'radar',
+      data:{labels:['清晰度','内容质量','美学质量'],datasets:[{
+        label:'各维度均分',data:[aAvg,bAvg,cAvg],fill:true,
+        backgroundColor:'rgba(29,78,216,.15)',borderColor:'#1d4ed8',
+        pointBackgroundColor:'#1d4ed8',pointBorderColor:'#fff',borderWidth:2,pointRadius:4}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        scales:{r:{min:0,max:5,ticks:{stepSize:1,font:{size:10},backdropColor:'transparent'},
+          grid:{color:'#e2e8f0'},angleLines:{color:'#e2e8f0'},
+          pointLabels:{font:{size:12,weight:'600'},
+            callback:(label,index)=>[label,fmt(radarDimVals[index])]}}},
+        plugins:{legend:{display:false},
+          centerText:{text:fmt(totalQ),sub:'综合质量分',sz:18,subSz:11,
+            color:totalQ>=3.5?'#16a34a':totalQ>=3?'#d97706':'#dc2626'}}}});
+  },50);
+}
+
+// ══ TIER MODAL ══
+function showTierModal(t,entityType){
+  entityType=entityType||'batch';
+  const items=Object.values(entityType==='site'?siteStats:batchStats)
+    .filter(e=>e.qualityTier===t).sort((a,b)=>(b.qualityScore||0)-(a.qualityScore||0));
+  const typeName=entityType==='site'?'站点':'数据批次';
+  const rows=items.map(e=>`<tr>
+    <td ${entityType==='batch'?'style="font-family:monospace"':''}>${escH(e.id)}</td>
+    ${entityType==='batch'?`<td>${escH(e.site||'—')}</td>`:''}
+    <td>${e.count.toLocaleString()}</td>
+    <td><span class="pill ${TIER_CLASS[e.qualityTier]}">${fmt(e.qualityScore)}</span></td>
+    <td><button class="btn btn-sm" onclick="closeModal();${entityType==='site'?`navToSite('${escAttr(e.id)}')`:`navToBatch('${escAttr(e.id)}')`}">查看详情</button></td>
+  </tr>`).join('');
+  document.getElementById('modalBody').innerHTML=`
+    <div class="modal-head">
+      <h2>${TIER_LABEL[t]}${typeName}详情（共 ${items.length} 个）</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th>${entityType==='site'?'站点名称':'批次 ID'}</th>
+        ${entityType==='batch'?'<th>站点</th>':''}
+        <th>图片数</th><th>质量分</th><th>操作</th>
+      </tr></thead><tbody>${rows}</tbody></table>
+    </div>`;
+  document.getElementById('modalBg').classList.add('open');
+}
+function closeModal(){document.getElementById('modalBg').classList.remove('open');}
+document.getElementById('modalBg').addEventListener('click',e=>{if(e.target===document.getElementById('modalBg'))closeModal();});
+
+// ══ SITE / BATCH TABLES ══
+function getSortedSites(){
+  const q=(document.getElementById('siteSearch')||{}).value||'';
+  return Object.values(siteStats).filter(s=>!q||s.id.toLowerCase().includes(q.toLowerCase()))
+    .sort((a,b)=>((a[siteSortKey]??-Infinity)-(b[siteSortKey]??-Infinity))*siteSortDir);
+}
+function renderSiteTable(){
+  const items=getSortedSites(),slice=items.slice((sitePage-1)*PAGE_SIZE,sitePage*PAGE_SIZE);
+  const DIM_LBL={qualityScore:'质量分',aAvg:'清晰度分',bAvg:'内容质量分',cAvg:'美学质量分'};
+  const dimKey=siteSortKey in DIM_LBL?siteSortKey:'qualityScore';
+  const th=(k,l)=>`<th class="sortable" onclick="setSiteSort('${k}')">${l} ${siteSortKey===k?(siteSortDir>0?'▲':'▼'):'⇅'}</th>`;
+  document.getElementById('siteTableWrap').innerHTML=`<table><thead><tr>
+    ${th('id','站点名称')}${th('count','图片数量')}${th(dimKey,DIM_LBL[dimKey])}<th>质量等级</th><th>操作</th>
+  </tr></thead><tbody>${slice.map(s=>`<tr>
+    <td>${escH(s.id)}</td><td>${s.count.toLocaleString()}</td>
+    <td><span class="pill ${TIER_CLASS[s.qualityTier]}">${fmt(s[dimKey])}</span></td>
+    <td><span class="dot ${DOT_CLASS[s.qualityTier]}"></span>${TIER_LABEL[s.qualityTier]}</td>
+    <td><button class="btn btn-sm" onclick="navToSite('${escAttr(s.id)}')">查看详情</button></td>
+  </tr>`).join('')}</tbody></table>`;
+  document.getElementById('sitePager').innerHTML=renderPager(sitePage,Math.ceil(items.length/PAGE_SIZE),items.length,'site');
+}
+function setSiteSort(k){if(siteSortKey===k)siteSortDir*=-1;else{siteSortKey=k;siteSortDir=-1;}renderSiteTable();}
+
+function getSortedBatches(){
+  const q=(document.getElementById('batchSearch')||{}).value||'';
+  return Object.values(batchStats).filter(b=>!q||b.id.toLowerCase().includes(q.toLowerCase())||(b.site||'').toLowerCase().includes(q.toLowerCase()))
+    .sort((a,b)=>((a[batchSortKey]??-Infinity)-(b[batchSortKey]??-Infinity))*batchSortDir);
+}
+function renderBatchTable(){
+  const items=getSortedBatches(),slice=items.slice((batchPage-1)*PAGE_SIZE,batchPage*PAGE_SIZE);
+  const DIM_LBL={qualityScore:'质量分',aAvg:'清晰度分',bAvg:'内容质量分',cAvg:'美学质量分'};
+  const dimKey=batchSortKey in DIM_LBL?batchSortKey:'qualityScore';
+  const th=(k,l)=>`<th class="sortable" onclick="setBatchSort('${k}')">${l} ${batchSortKey===k?(batchSortDir>0?'▲':'▼'):'⇅'}</th>`;
+  document.getElementById('batchTableWrap').innerHTML=`<table><thead><tr>
+    ${th('id','批次 ID')}${th('site','站点')}${th('count','图片数量')}${th(dimKey,DIM_LBL[dimKey])}<th>质量等级</th><th>操作</th>
+  </tr></thead><tbody>${slice.map(b=>`<tr>
+    <td style="font-family:monospace">${escH(b.id)}</td><td>${escH(b.site||'—')}</td><td>${b.count.toLocaleString()}</td>
+    <td><span class="pill ${TIER_CLASS[b.qualityTier]}">${fmt(b[dimKey])}</span></td>
+    <td><span class="dot ${DOT_CLASS[b.qualityTier]}"></span>${TIER_LABEL[b.qualityTier]}</td>
+    <td><button class="btn btn-sm" onclick="navToBatch('${escAttr(b.id)}')">查看详情</button></td>
+  </tr>`).join('')}</tbody></table>`;
+  document.getElementById('batchPager').innerHTML=renderPager(batchPage,Math.ceil(items.length/PAGE_SIZE),items.length,'batch');
+}
+function setBatchSort(k){if(batchSortKey===k)batchSortDir*=-1;else{batchSortKey=k;batchSortDir=-1;}renderBatchTable();}
+function setSiteSortDim(dim){siteSortKey=dim;siteSortDir=-1;sitePage=1;renderSiteTable();}
+function setBatchSortDim(dim){batchSortKey=dim;batchSortDir=-1;batchPage=1;renderBatchTable();}
+
+function renderPager(page,pages,total,type){
+  if(pages<=1) return`<div class="pg-info">共 ${total} 条</div>`;
+  const go=p=>`setPage('${type}',${p})`;
+  const btns=[`<span class="pg-info">共 ${total} 条</span>`];
+  if(page>1) btns.push(`<button class="pg" onclick="${go(page-1)}">‹</button>`);
+  const s=Math.max(1,page-2),e=Math.min(pages,page+2);
+  if(s>1) btns.push(`<button class="pg" onclick="${go(1)}">1</button>`);
+  if(s>2) btns.push(`<span class="pg-info">…</span>`);
+  for(let p=s;p<=e;p++) btns.push(`<button class="pg ${p===page?'pg-active':''}" onclick="${go(p)}">${p}</button>`);
+  if(e<pages-1) btns.push(`<span class="pg-info">…</span>`);
+  if(e<pages) btns.push(`<button class="pg" onclick="${go(pages)}">${pages}</button>`);
+  if(page<pages) btns.push(`<button class="pg" onclick="${go(page+1)}">›</button>`);
+  return`<div class="pagination">${btns.join('')}</div>`;
+}
+function setPage(type,p){
+  if(type==='site'){sitePage=p;renderSiteTable();}
+  else if(type==='batch'){batchPage=p;renderBatchTable();}
+  else if(type==='siteList'){siteListPage=p;renderSitesList();}
+  else if(type==='batchList'){batchListPage=p;renderBatchesList();}
+}
+
+// ══ EXPORT ══
+function toggleExportDd(type){
+  const el=document.getElementById('exportDd-'+type);
+  el.classList.toggle('open');
+}
+function closeExportDds(){document.querySelectorAll('.export-dd').forEach(e=>e.classList.remove('open'));}
+document.addEventListener('click',e=>{if(!e.target.closest('.export-wrap'))closeExportDds();});
+function exportData(type,format){
+  const items=(type==='site'?Object.values(siteStats):Object.values(batchStats))
+    .sort((a,b)=>(b.qualityScore||0)-(a.qualityScore||0));
+  const fname=(type==='site'?'站点质量分析':'批次质量分析')+'_'+new Date().toLocaleDateString('zh-CN').replace(/\//g,'-');
+  let headers,rows;
+  if(type==='site'){headers=['站点','图片数量','质量分','质量等级'];rows=items.map(s=>[s.id,s.count,fmt(s.qualityScore),TIER_LABEL[s.qualityTier]]);}
+  else{headers=['批次ID','站点','图片数量','质量分','质量等级'];rows=items.map(b=>[b.id,b.site||'',b.count,fmt(b.qualityScore),TIER_LABEL[b.qualityTier]]);}
+  if(format==='csv'){
+    const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    dlBlob(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}),fname+'.csv');
+  }else{
+    const ws=XLSX.utils.aoa_to_sheet([headers,...rows]),wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'Sheet1');XLSX.writeFile(wb,fname+'.xlsx');
+  }
+}
+function dlBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href);}
+
+// ══ SITES / BATCHES TABS ══
+function renderSitesTab(){initListFilterPanel('site');renderSitesList();}
+function renderBatchesTab(){initListFilterPanel('batch');renderBatchesList();}
+function navToSite(id){switchTab('sites');showSiteDetail(id);}
+function navToBatch(id){switchTab('batches');showBatchDetail(id);}
+
+// ── Filter panel ──
+const SCORE_OPTS=[1,2,2.5,3,3.5,4,5];
+function initListFilterPanel(type){
+  const panel=document.getElementById(type+'FilterPanel');
+  if(!panel||panel.dataset.init) return;
+  panel.dataset.init='1';
+  const opts=SCORE_OPTS.map(v=>`<option value="${v}">${v}分</option>`).join('');
+  const rerender=type==='site'?'renderSitesList':'renderBatchesList';
+  panel.innerHTML=`
+    <div class="sf-item"><div class="sf-lbl">图片数量 ≥</div>
+      <input type="number" class="sf-num" id="sf${type}Count" placeholder="不限" min="0" oninput="${rerender}()"></div>
+    <div class="sf-item"><div class="sf-lbl">质量分 ≥</div>
+      <select class="sf-sel" id="sf${type}Score" onchange="${rerender}()"><option value="">不限</option>${opts}</select></div>
+    <div class="sf-item"><div class="sf-lbl">清晰度 ≥</div>
+      <select class="sf-sel" id="sf${type}A" onchange="${rerender}()"><option value="">不限</option>${opts}</select></div>
+    <div class="sf-item"><div class="sf-lbl">内容质量 ≥</div>
+      <select class="sf-sel" id="sf${type}B" onchange="${rerender}()"><option value="">不限</option>${opts}</select></div>
+    <div class="sf-item"><div class="sf-lbl">美学质量 ≥</div>
+      <select class="sf-sel" id="sf${type}C" onchange="${rerender}()"><option value="">不限</option>${opts}</select></div>
+    <button class="btn btn-sm" onclick="clearListFilters('${type}')">重置</button>`;
+}
+function toggleListFilter(type){
+  const panel=document.getElementById(type+'FilterPanel');
+  const btn=document.getElementById(type+'FilterBtn');
+  const isOpen=panel.classList.toggle('open');
+  btn.textContent='筛选 '+(isOpen?'▲':'▾');
+  btn.classList.toggle('btn-active',isOpen);
+}
+function getListFilters(type){
+  const g=id=>(document.getElementById(id)||{}).value||null;
+  return{count:g('sf'+type+'Count'),score:g('sf'+type+'Score'),
+    a:g('sf'+type+'A'),b:g('sf'+type+'B'),c:g('sf'+type+'C')};
+}
+function clearListFilters(type){
+  ['Count','Score','A','B','C'].forEach(k=>{const el=document.getElementById('sf'+type+k);if(el)el.value='';});
+  if(type==='site'){siteListPage=1;renderSitesList();}else{batchListPage=1;renderBatchesList();}
+}
+function applyListFilter(items,f){
+  if(f.count) items=items.filter(e=>e.count>=parseFloat(f.count));
+  if(f.score) items=items.filter(e=>(e.qualityScore||0)>=parseFloat(f.score));
+  if(f.a) items=items.filter(e=>(e.aAvg||0)>=parseFloat(f.a));
+  if(f.b) items=items.filter(e=>(e.bAvg||0)>=parseFloat(f.b));
+  if(f.c) items=items.filter(e=>(e.cAvg||0)>=parseFloat(f.c));
+  return items;
+}
+
+function renderSitesList(){
+  const q=(document.getElementById('siteListSearch')||{}).value||'';
+  let items=Object.values(siteStats).filter(s=>!q||s.id.toLowerCase().includes(q.toLowerCase()));
+  items=applyListFilter(items,getListFilters('site'));
+  items.sort((a,b)=>(b.qualityScore||0)-(a.qualityScore||0));
+  const pages=Math.ceil(items.length/PAGE_SIZE);
+  const slice=items.slice((siteListPage-1)*PAGE_SIZE,siteListPage*PAGE_SIZE);
+  const hasF=Object.values(getListFilters('site')).some(v=>v);
+  const btn=document.getElementById('siteFilterBtn');if(btn)btn.classList.toggle('btn-active',hasF);
+  document.getElementById('sitesListWrap').innerHTML=`<table><thead><tr>
+    <th>站点名称</th><th>图片数量</th><th>质量分</th><th>清晰度分</th><th>内容质量分</th><th>美学质量分</th><th>质量等级</th><th>操作</th>
+  </tr></thead><tbody>${slice.map(s=>`<tr>
+    <td>${escH(s.id)}</td><td>${s.count.toLocaleString()}</td>
+    <td><span class="pill ${TIER_CLASS[s.qualityTier]}">${fmt(s.qualityScore)}</span></td>
+    <td>${fmt(s.aAvg)}</td><td>${fmt(s.bAvg)}</td><td>${fmt(s.cAvg)}</td>
+    <td><span class="dot ${DOT_CLASS[s.qualityTier]}"></span>${TIER_LABEL[s.qualityTier]}</td>
+    <td><button class="btn btn-sm" onclick="showSiteDetail('${escAttr(s.id)}')">查看详情</button></td>
+  </tr>`).join('')}</tbody></table>`;
+  document.getElementById('sitesListPager').innerHTML=renderPager(siteListPage,pages,items.length,'siteList');
+}
+function showSiteDetail(id){
+  document.getElementById('sitesListView').style.display='none';
+  document.getElementById('sitesDetailView').style.display='block';
+  document.getElementById('sitesDetailTitle').textContent='站点：'+id;
+  renderEntityDetail('site',id);
+}
+function showSitesList(){
+  document.getElementById('sitesListView').style.display='block';
+  document.getElementById('sitesDetailView').style.display='none';
+}
+
+function renderBatchesList(){
+  const q=(document.getElementById('batchListSearch')||{}).value||'';
+  let items=Object.values(batchStats).filter(b=>!q||b.id.toLowerCase().includes(q.toLowerCase())||(b.site||'').toLowerCase().includes(q.toLowerCase()));
+  items=applyListFilter(items,getListFilters('batch'));
+  items.sort((a,b)=>(b.qualityScore||0)-(a.qualityScore||0));
+  const pages=Math.ceil(items.length/PAGE_SIZE);
+  const slice=items.slice((batchListPage-1)*PAGE_SIZE,batchListPage*PAGE_SIZE);
+  const hasF=Object.values(getListFilters('batch')).some(v=>v);
+  const btn=document.getElementById('batchFilterBtn');if(btn)btn.classList.toggle('btn-active',hasF);
+  document.getElementById('batchesListWrap').innerHTML=`<table><thead><tr>
+    <th>批次 ID</th><th>站点</th><th>图片数量</th><th>质量分</th><th>清晰度分</th><th>内容质量分</th><th>美学质量分</th><th>质量等级</th><th>操作</th>
+  </tr></thead><tbody>${slice.map(b=>`<tr>
+    <td style="font-family:monospace">${escH(b.id)}</td><td>${escH(b.site||'—')}</td><td>${b.count.toLocaleString()}</td>
+    <td><span class="pill ${TIER_CLASS[b.qualityTier]}">${fmt(b.qualityScore)}</span></td>
+    <td>${fmt(b.aAvg)}</td><td>${fmt(b.bAvg)}</td><td>${fmt(b.cAvg)}</td>
+    <td><span class="dot ${DOT_CLASS[b.qualityTier]}"></span>${TIER_LABEL[b.qualityTier]}</td>
+    <td><button class="btn btn-sm" onclick="showBatchDetail('${escAttr(b.id)}')">查看详情</button></td>
+  </tr>`).join('')}</tbody></table>`;
+  document.getElementById('batchesListPager').innerHTML=renderPager(batchListPage,pages,items.length,'batchList');
+}
+function showBatchDetail(id){
+  document.getElementById('batchesListView').style.display='none';
+  document.getElementById('batchesDetailView').style.display='block';
+  document.getElementById('batchesDetailTitle').textContent='批次：'+id;
+  renderEntityDetail('batch',id);
+}
+function showBatchesList(){
+  document.getElementById('batchesListView').style.display='block';
+  document.getElementById('batchesDetailView').style.display='none';
+}
+
+// ══ GET ENTITY RECORDS ══
+function getEntityRecords(type,id){
+  if(type==='batch') return(batchStats[id]||{}).records||[];
+  return Object.values(batchStats).flatMap(b=>b.records.filter(r=>r.site===id));
+}
+
+// ══ ENTITY DETAIL ══
+function renderEntityDetail(type,id){
+  const entity=type==='site'?siteStats[id]:batchStats[id];
+  const area=document.getElementById(type==='site'?'siteDetailArea':'batchDetailArea');
+  if(!entity||!area) return;
+  const pfx=(type+id).replace(/[^a-zA-Z0-9_]/g,'_');
+  const records=getEntityRecords(type,id);
+
+  // Pass rate for S chart
+  const lqS=(entity.sDist[1]||0)+(entity.sDist[2]||0)+(entity.sDist[2.5]||0);
+  const passRate=entity.validCount?fmt((entity.validCount-lqS)/entity.validCount*100,1):null;
+
+  // Low quality total
+  const lqTotal=(entity.sDist[1]||0)+(entity.sDist[2]||0)+(entity.sDist[2.5]||0);
+  const lqPct=entity.validCount?lqTotal/entity.validCount*100:0;
+
+  // Build low quality sections
+  const dimConfigs=[
+    {dim:'A',label:'清晰度',dist:entity.aDist,vc:entity.aVC,levels:[
+      {score:1,key:'A1',lbl:'1分（极低清晰度）'},{score:2,key:'A2',lbl:'2分（低清晰度）'},{score:2.5,key:'A25',lbl:'2.5分（较低清晰度）'}]},
+    {dim:'B',label:'内容质量',dist:entity.bDist,vc:entity.bVC,levels:[
+      {score:1,key:'B1',lbl:'1分（严重质量问题）'},{score:2,key:'B2',lbl:'2分（内容存在缺陷）'},{score:2.5,key:'B25',lbl:'2.5分（内容存在瑕疵）'}]},
+    {dim:'C',label:'美学质量',dist:entity.cDist,vc:entity.cVC,levels:[
+      {score:1,key:'C1',lbl:'1分（无美感）'},{score:2,key:'C2',lbl:'2分（美感较差）'},{score:2.5,key:'C25',lbl:'2.5分（美感稍差）'}]},
+  ];
+  const lqSections=dimConfigs.map(({dim,label,dist,vc,levels})=>{
+    const dimLq=(dist[1]||0)+(dist[2]||0)+(dist[2.5]||0);
+    const dimPct=vc?dimLq/vc*100:0;
+    const secId=pfx+'_lq_'+dim;
+    const levelsHtml=levels.map(({score,key,lbl})=>{
+      const cnt=dist[score]||0;if(!cnt) return '';
+      const tags=Object.entries(entity.tagsByDimLevel[key]||{}).sort((a,b)=>b[1]-a[1]);
+      if(!tags.length) return`<div class="lq-level-block">
+        <div class="lq-level-hdr"><span class="pill pill-low" style="font-size:11px">${lbl}</span><span style="font-size:12px;color:#94a3b8">${cnt.toLocaleString()}张</span></div>
+        <p style="font-size:12px;color:#94a3b8">暂无标签数据</p></div>`;
+      const tagRecs=records.filter(r=>r[dim+(score===2.5?'25':score)+'t']?.length>0);
+      const tagsHtml=tags.map(([tag,tc])=>{
+        const recKey=dim+(score===2.5?'25':score)+'t';
+        const matched=tagRecs.filter(r=>r[recKey]&&r[recKey].includes(tag)).slice(0,8);
+        const thumbs=matched.filter(r=>r.url).map(r=>
+          `<img class="lq-thumb" src="${escH(r.url)}" alt="" onerror="this.style.display='none'" onclick="openLightboxUrl('${escAttr(r.url)}')">`
+        ).join('');
+        return`<div class="lq-tag-item">
+          <div class="lq-tag-hdr"><span>${escH(tag)}</span><span class="lq-tag-cnt">${tc.toLocaleString()}张 (${fmt(tc/(vc||1)*100,1)}%)</span></div>
+          ${thumbs?`<div class="lq-img-strip">${thumbs}</div>`:''}
+        </div>`;
+      }).join('');
+      return`<div class="lq-level-block">
+        <div class="lq-level-hdr"><span class="pill pill-low" style="font-size:11px">${lbl}</span><span style="font-size:12px;color:#94a3b8">${cnt.toLocaleString()}张 (${fmt(cnt/(vc||1)*100,1)}%)</span></div>
+        ${tagsHtml}</div>`;
+    }).join('');
+    return`<div class="lq-section">
+      <div class="lq-sec-hdr" onclick="toggleLqSec('${secId}')">
+        <div class="lq-sec-title">
+          <span>${label}低质</span>
+          <span class="pill ${dimPct>30?'pill-low':dimPct>15?'pill-med':'pill-high'}" style="font-size:11px">${dimLq.toLocaleString()}张</span>
+        </div>
+        <span style="font-size:12px;color:#94a3b8">低质占比 ${fmt(dimPct,1)}% ▾</span>
+      </div>
+      <div class="lq-sec-body" id="${secId}">${levelsHtml||'<p style="font-size:13px;color:#94a3b8">暂无低质数据</p>'}</div>
+    </div>`;
+  }).join('');
+
+  // Image mini grid (first 30 with url)
+  const imgRecs=records.filter(r=>r.url).slice(0,30);
+  const miniGrid=imgRecs.length?`
+    <div class="img-mini-grid">
+      ${imgRecs.map(r=>`<img class="img-mini" src="${escH(r.url)}" alt="" onerror="this.style.display='none'" onclick="openLightboxUrl('${escAttr(r.url)}')">`).join('')}
+    </div>
+    <a style="font-size:13px;color:#1d4ed8;cursor:pointer" onclick="openImgDetail('${type}','${escAttr(id)}')">图片详情（查看全部 ${records.length.toLocaleString()} 张）→</a>
+  `:`<p style="font-size:13px;color:#94a3b8">暂无可显示的图片（需要上传的文件中包含图片 URL 列）</p>`;
+
+  area.innerHTML=`
+    <div class="stats-row" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stat-card"><div class="stat-label">图片总数</div><div class="stat-value">${entity.count.toLocaleString()}</div></div>
+      <div class="stat-card" style="border-left-color:${entity.qualityScore>=3.5?'#16a34a':entity.qualityScore>=3?'#d97706':'#dc2626'}">
+        <div class="stat-label">整体质量分</div>
+        <div class="stat-value" style="color:${entity.qualityScore>=3.5?'#16a34a':entity.qualityScore>=3?'#d97706':'#dc2626'}">${fmt(entity.qualityScore)}</div>
+        <div class="stat-sub">${TIER_LABEL[entity.qualityTier]}</div></div>
+      <div class="stat-card"><div class="stat-label">有效评分数</div><div class="stat-value">${entity.validCount.toLocaleString()}</div>
+        <div class="stat-sub">${fmt(entity.validCount/(entity.count||1)*100,1)}% 有效率</div></div>
+    </div>
+
+    <div class="section-head">整体质量情况</div>
+    <div class="card">
+      <div class="pie-grid">
+        <div class="pie-box"><div class="pie-label">综合分分布</div><div class="pie-h"><canvas id="${pfx}_S"></canvas></div></div>
+        <div class="pie-box"><div class="pie-label">清晰度分布</div><div class="pie-h"><canvas id="${pfx}_A"></canvas></div></div>
+        <div class="pie-box"><div class="pie-label">内容质量分布</div><div class="pie-h"><canvas id="${pfx}_B"></canvas></div></div>
+        <div class="pie-box"><div class="pie-label">美学质量分布</div><div class="pie-h"><canvas id="${pfx}_C"></canvas></div></div>
+      </div>
+    </div>
+
+    <div class="section-head">低质数据情况</div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <span style="font-size:13px;color:#475569">低质图片总量</span>
+        <span class="pill ${lqPct>30?'pill-low':lqPct>15?'pill-med':'pill-high'}">${lqTotal.toLocaleString()} 张</span>
+        <span style="font-size:12px;color:#94a3b8">占有效评分 ${fmt(lqPct,1)}%</span>
+      </div>
+      ${lqSections}
+    </div>
+
+    <div class="section-head">图片列表</div>
+    <div class="card">${miniGrid}</div>
+  `;
+
+  // Render pie charts
+  setTimeout(()=>{
+    const chartData=[
+      [pfx+'_S',entity.sDist,{text:passRate?passRate+'%':null,sub:'合格率',sz:14,subSz:10}],
+      [pfx+'_A',entity.aDist,null],[pfx+'_B',entity.bDist,null],[pfx+'_C',entity.cDist,null],
+    ];
+    chartData.forEach(([cid,dist,ct])=>{
+      destroyChart(cid);const el=document.getElementById(cid);if(!el)return;
+      const data=SCORE_LEVELS.map(s=>dist[s]||0);
+      const total=data.reduce((a,b)=>a+b,0);
+      chartInstances[cid]=new Chart(el,{type:'doughnut',
+        plugins:[ChartDataLabels],
+        data:{labels:SCORE_LEVELS.map(s=>s+'分'),datasets:[{data,
+          backgroundColor:SCORE_LEVELS.map(s=>SCORE_COLORS[s]+'cc'),
+          borderColor:SCORE_LEVELS.map(s=>SCORE_COLORS[s]),borderWidth:1,hoverOffset:4}]},
+        options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
+          layout:{padding:{top:16,right:44,bottom:4,left:44}},
+          plugins:{
+            legend:{display:true,position:'bottom',
+              labels:{font:{size:10},padding:6,
+                filter:(item,data)=>data.datasets[0].data[item.index]>0}},
+            tooltip:{callbacks:{label:ctx=>{const p=total?(ctx.parsed/total*100).toFixed(1):0;return`${ctx.label}: ${ctx.parsed.toLocaleString()}张 (${p}%)`;}}}  ,
+            centerText:ct||null,
+            datalabels:{
+              display:(ctx)=>ctx.dataset.data[ctx.dataIndex]>0&&total>0&&ctx.dataset.data[ctx.dataIndex]/total>=0.04,
+              formatter:(value,ctx)=>{const p=total?(value/total*100).toFixed(1):0;return`${ctx.chart.data.labels[ctx.dataIndex]}\n${value.toLocaleString()}张\n${p}%`;},
+              anchor:'end',align:'end',offset:4,
+              font:{size:9,weight:'600'},
+              color:'#475569',
+            }}}});
+    });
+  },50);
+}
+
+function toggleLqSec(id){document.getElementById(id).classList.toggle('open');}
+
+// ══ IMAGE DETAIL OVERLAY ══
+function openImgDetail(type,id){
+  imgDetailState={type,id,tab:'all',filters:{S:null,A:null,B:null,C:null},page:1};
+  const entity=type==='site'?siteStats[id]:batchStats[id];
+  const label=entity?`${type==='site'?'站点':'批次'}：${id}`:'图片详情';
+  document.getElementById('imgOvTitle').textContent=label;
+  ['all','reviewed','unreviewed'].forEach(t=>document.getElementById('filterTab-'+t).classList.toggle('active',t==='all'));
+  document.getElementById('imgOverlay').classList.add('open');
+  renderImgDetailContent();
+}
+function closeImgDetail(){document.getElementById('imgOverlay').classList.remove('open');closeImgInfo();}
+
+function setImgTab(tab){
+  imgDetailState.tab=tab;imgDetailState.page=1;
+  ['all','reviewed','unreviewed'].forEach(t=>document.getElementById('filterTab-'+t).classList.toggle('active',t===tab));
+  renderImgDetailContent();
+}
+
+function setImgFilter(dim,val){imgDetailState.filters[dim]=val||null;imgDetailState.page=1;renderImgDetailContent();}
+function clearImgFilters(){imgDetailState.filters={S:null,A:null,B:null,C:null};imgDetailState.page=1;
+  document.querySelectorAll('.sf-sel').forEach(s=>s.value='');renderImgDetailContent();}
+
+function filterImgRecords(recs){
+  const{tab,filters}=imgDetailState;
+  let f=recs;
+  if(tab==='reviewed') f=f.filter(r=>r.isReviewed);
+  else if(tab==='unreviewed') f=f.filter(r=>!r.isReviewed);
+  if(tab==='reviewed'){
+    if(filters.S) f=f.filter(r=>r.S===parseFloat(filters.S));
+    if(filters.A) f=f.filter(r=>r.A===parseFloat(filters.A));
+    if(filters.B) f=f.filter(r=>r.B===parseFloat(filters.B));
+    if(filters.C) f=f.filter(r=>r.C===parseFloat(filters.C));
+  }
+  return f;
+}
+
+function renderImgDetailContent(){
+  const{type,id,tab,page}=imgDetailState;
+  const PS=50;
+  const allRecs=getEntityRecords(type,id);
+  const filtered=filterImgRecords(allRecs);
+  currentImgRecords=filtered;
+  const total=filtered.length,pages=Math.ceil(total/PS);
+  const slice=filtered.slice((page-1)*PS,page*PS);
+  const startIdx=(page-1)*PS;
+
+  // Score filters bar
+  const sfBar=document.getElementById('imgScoreFiltersBar');
+  if(tab==='reviewed'){
+    const opts=SCORE_LEVELS.map(s=>`<option value="${s}">${s}分</option>`).join('');
+    sfBar.innerHTML=`<div class="score-filters-bar">
+      <span style="font-size:13px;font-weight:500;color:#475569;flex-shrink:0">筛选：</span>
+      ${[['S','整体分'],['A','清晰度'],['B','内容质量'],['C','美学质量']].map(([k,l])=>
+        `<div class="sf-item"><div class="sf-lbl">${l}</div>
+        <select class="sf-sel" id="sf-${k}" onchange="setImgFilter('${k}',this.value)">
+          <option value="">全部</option>${opts}</select></div>`).join('')}
+      <button class="btn btn-sm" onclick="clearImgFilters()" style="align-self:flex-end">重置</button>
+    </div>`;
+    // Restore filter values
+    ['S','A','B','C'].forEach(k=>{const el=document.getElementById('sf-'+k);if(el&&imgDetailState.filters[k])el.value=imgDetailState.filters[k];});
+  }else sfBar.innerHTML='';
+
+  // Image grid
+  const cards=slice.map((rec,i)=>{
+    const sc=rec.S!=null?`<span class="pill ${TIER_CLASS[tier(rec.S)]}" style="font-size:11px">${rec.S}分</span>`:`<span style="font-size:11px;color:#94a3b8">未质检</span>`;
+    return`<div class="img-card" onclick="openImgInfo(${startIdx+i})">
+      <img src="${escH(rec.url||'')}" alt="" onerror="this.style.background='#e8edf5'">
+      <div class="img-card-meta"><div class="img-card-score">${sc}</div><div class="img-card-sid">${escH(rec.sid||'—')}</div></div>
+    </div>`;
+  }).join('');
+  document.getElementById('imgGridWrap').innerHTML=slice.length
+    ?`<div style="margin-bottom:12px;font-size:13px;color:#64748b">共 ${total.toLocaleString()} 张</div><div class="img-grid">${cards}</div>`
+    :`<div style="text-align:center;padding:60px;color:#94a3b8">暂无符合条件的图片</div>`;
+
+  // Pager
+  const pBtns=[];
+  if(pages>1){
+    if(page>1) pBtns.push(`<button class="pg" onclick="setImgPage(${page-1})">‹</button>`);
+    const s=Math.max(1,page-2),e=Math.min(pages,page+2);
+    if(s>1) pBtns.push(`<button class="pg" onclick="setImgPage(1)">1</button>`);
+    if(s>2) pBtns.push(`<span class="pg-info">…</span>`);
+    for(let p=s;p<=e;p++) pBtns.push(`<button class="pg ${p===page?'pg-active':''}" onclick="setImgPage(${p})">${p}</button>`);
+    if(e<pages-1) pBtns.push(`<span class="pg-info">…</span>`);
+    if(e<pages) pBtns.push(`<button class="pg" onclick="setImgPage(${pages})">${pages}</button>`);
+    if(page<pages) pBtns.push(`<button class="pg" onclick="setImgPage(${page+1})">›</button>`);
+  }
+  document.getElementById('imgPagerWrap').innerHTML=pBtns.length?`<div class="pagination">${pBtns.join('')}</div>`:'';
+}
+function setImgPage(p){imgDetailState.page=p;renderImgDetailContent();}
+
+// ══ IMAGE INFO PANEL ══
+function openImgInfo(idx){
+  const rec=currentImgRecords[idx];if(!rec) return;
+  const allTags=[];
+  if(rec.isReviewed){
+    ['A1t','A2t','A25t','B1t','B2t','B25t','C1t','C2t','C25t'].forEach(k=>{if(rec[k])allTags.push(...rec[k]);});
+  }
+  const scoreHtml=rec.isReviewed?`<div class="score-chips">
+    ${rec.S!=null?`<span class="score-chip ${TIER_CLASS[tier(rec.S)]}">整体 ${rec.S}</span>`:''}
+    ${rec.A!=null?`<span class="score-chip" style="background:#eff6ff;color:#1d4ed8">清晰 ${rec.A}</span>`:''}
+    ${rec.B!=null?`<span class="score-chip" style="background:#f0fdf4;color:#16a34a">内容 ${rec.B}</span>`:''}
+    ${rec.C!=null?`<span class="score-chip" style="background:#fdf4ff;color:#7c3aed">美学 ${rec.C}</span>`:''}
+  </div>`:'<p style="font-size:12px;color:#94a3b8">未质检</p>';
+  document.getElementById('imgInfoContent').innerHTML=`
+    ${rec.url?`<img class="img-info-preview" src="${escH(rec.url)}" onerror="this.style.display='none'" onclick="openLightboxUrl('${escAttr(rec.url)}')">`:''}
+    <div class="img-info-ttl">图片信息</div>
+    <div class="img-info-row"><span class="img-info-key">批次 ID</span><span class="img-info-val">${escH(rec.sid||'—')}</span></div>
+    <div class="img-info-row"><span class="img-info-key">站点</span><span class="img-info-val">${escH(rec.site||'—')}</span></div>
+    <div style="margin:10px 0 6px"><div style="font-size:11px;color:#94a3b8;margin-bottom:5px">质检结果</div>${scoreHtml}</div>
+    ${allTags.length?`<div><div style="font-size:11px;color:#94a3b8;margin-bottom:5px">低质标签</div><div class="tag-chips">${allTags.map(t=>`<span class="tag-chip">${escH(t)}</span>`).join('')}</div></div>`:''}
+  `;
+  document.getElementById('imgInfoPnl').classList.add('open');
+}
+function closeImgInfo(){document.getElementById('imgInfoPnl').classList.remove('open');}
+
+// ══ LIGHTBOX ══
+function openLightboxUrl(url){document.getElementById('lbImg').src=url;document.getElementById('lightbox').classList.add('open');}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('open');}
+
+// ══ TAB SWITCHING ══
+function switchTab(tab){
+  ['overview','sites','batches'].forEach(t=>{
+    document.getElementById('tab-btn-'+t).classList.toggle('active',t===tab);
+    document.getElementById('panel-'+t).classList.toggle('active',t===tab);
+  });
+}
+
+// ══ HELPERS ══
+function showLoading(show){document.getElementById('loadingBg').classList.toggle('open',show);}
+function destroyChart(id){if(chartInstances[id]){chartInstances[id].destroy();delete chartInstances[id];}}
+function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function escAttr(s){return String(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
+</script>
+</body>
+</html>
