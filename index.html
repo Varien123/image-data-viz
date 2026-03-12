@@ -86,10 +86,10 @@ label{font-size:13px;color:#475569;font-weight:500}
 /* Section heads */
 .section-head{font-size:14px;font-weight:700;color:#334155;margin:24px 0 14px;padding-left:10px;border-left:3px solid #1d4ed8}
 /* Pie charts */
-.pie-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.pie-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
 .pie-box{position:relative}
 .pie-label{font-size:13px;font-weight:600;color:#475569;margin-bottom:8px;text-align:center}
-.pie-h{height:260px}
+.pie-h{height:300px}
 /* Filter panel */
 .filter-panel{display:none;flex-wrap:wrap;gap:10px;padding:12px 14px;background:#f8fafc;border-radius:8px;margin-bottom:12px;align-items:flex-end;border:1px solid #e2e8f0}
 .filter-panel.open{display:flex}
@@ -182,7 +182,7 @@ label{font-size:13px;color:#475569;font-weight:500}
 @media(max-width:900px){
   .stats-row{grid-template-columns:repeat(2,1fr)}
   .qov-body{grid-template-columns:1fr}
-  .pie-grid{grid-template-columns:repeat(2,1fr)}
+  .pie-grid{grid-template-columns:repeat(1,1fr)}
 }
 </style>
 </head>
@@ -1078,10 +1078,10 @@ function renderEntityDetail(type,id){
           backgroundColor:SCORE_LEVELS.map(s=>SCORE_COLORS[s]+'cc'),
           borderColor:SCORE_LEVELS.map(s=>SCORE_COLORS[s]),borderWidth:1,hoverOffset:4}]},
         options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
-          layout:{padding:{top:20,right:52,bottom:56,left:52}},
+          layout:{padding:{top:28,right:70,bottom:80,left:70}},
           plugins:{
             legend:{display:true,position:'bottom',
-              labels:{boxWidth:8,boxHeight:8,font:{size:10},padding:8,
+              labels:{boxWidth:8,boxHeight:8,font:{size:10},padding:14,
                 filter:(item,data)=>data.datasets[0].data[item.index]>0}},
             tooltip:{callbacks:{label:ctx=>{const p=total?(ctx.parsed/total*100).toFixed(1):0;return`${ctx.label}: ${ctx.parsed.toLocaleString()}张 (${p}%)`;}}}  ,
             centerText:ct||null,
@@ -1254,9 +1254,7 @@ function escAttr(s){return String(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot
 // ══ SNAPSHOT EXPORT ══
 async function exportSnapshot(){
   if(!totalRows){alert('请先上传数据文件');return;}
-  let html;
-  try{const r=await fetch(location.href);html=await r.text();}
-  catch(e){alert('无法读取页面源码（浏览器安全限制）\n请用 Chrome 打开 index.html，或通过本地服务器访问');return;}
+  let html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
   // Strip any previous snapshot injection to avoid nesting
   html=html.replace(/<script>window\.__SNAPSHOT__[\s\S]*?<\/script>\n?/,'');
   html=html.replace(/<script>\/\*SNAP_INIT\*\/[\s\S]*?<\/script>\n?/,'');
