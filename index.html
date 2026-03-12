@@ -252,6 +252,9 @@ label{font-size:13px;color:#475569;font-weight:500}
       📂 上传数据文件 (CSV / XLSX)
     </button>
     <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none">
+    <button class="btn-upload" id="btnExportPreload" onclick="exportPreloadJson()" style="display:none;background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22)">
+      📤 导出预置数据
+    </button>
     <button class="btn-upload" onclick="openHistPanel()" style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22)">
       🕐 历史记录
     </button>
@@ -588,6 +591,7 @@ function renderAll(){
     document.getElementById(t+'Empty').style.display='none';
     document.getElementById(t+'Main').style.display='block';
   });
+  document.getElementById('btnExportPreload').style.display='';
 }
 
 // ══ OVERVIEW ══
@@ -1374,6 +1378,44 @@ function delHistEntry(id){
 document.getElementById('histBg').addEventListener('click',e=>{
   if(e.target===document.getElementById('histBg'))closeHistPanel();
 });
+
+// ══ 预置数据（data/preload.json）自动加载 ══
+async function tryLoadPreload(){
+  try{
+    const res=await fetch('./data/preload.json');
+    if(!res.ok)return;
+    const d=await res.json();
+    if(!d.batchStats||!d.siteStats||!d.totalRows)return;
+    batchStats=d.batchStats;siteStats=d.siteStats;totalRows=d.totalRows;
+    Object.values(batchStats).forEach(b=>{if(!b.records)b.records=[];});
+    const dt=d.exportedAt?new Date(d.exportedAt).toLocaleDateString('zh-CN'):'';
+    document.getElementById('fileLabel').textContent='预置数据'+(dt?' · '+dt:'');
+    renderAll();
+  }catch(e){}
+}
+
+// 将当前数据导出为 preload.json，提交到仓库 data/ 目录后所有访客可自动加载
+function exportPreloadJson(){
+  if(!totalRows){alert('请先上传数据文件');return;}
+  const slim={};
+  Object.entries(batchStats).forEach(([k,v])=>{const{records,...rest}=v;slim[k]=rest;});
+  const payload=JSON.stringify({batchStats:slim,siteStats,totalRows,exportedAt:new Date().toISOString()},null,2);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([payload],{type:'application/json;charset=utf-8'}));
+  a.download='preload.json';a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  setTimeout(()=>alert(
+    'preload.json 已下载！\n\n后续步骤：\n'+
+    '1. 将文件放入仓库 data/ 目录（替换原有文件）\n'+
+    '2. git add data/preload.json\n'+
+    '3. git commit -m "更新预置数据"\n'+
+    '4. git push\n\n'+
+    '完成后所有人打开网页将自动看到此数据。'
+  ),300);
+}
+
+// 页面启动时自动尝试加载预置数据
+tryLoadPreload();
 </script>
 </body>
 </html>
