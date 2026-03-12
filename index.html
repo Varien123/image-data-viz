@@ -1654,15 +1654,12 @@ function exportPreloadJson(){
     const o={};
     if(r.url) o.url=r.url;
     if(r.site) o.site=r.site;
-    if(r.source_id) o.source_id=r.source_id;
-    if(r.s!=null) o.s=r.s;
-    if(r.reviewed!=null) o.reviewed=r.reviewed;
-    // 各维度分值（用于图片详情筛选和展示）
-    ['A','B','C'].forEach(d=>{
-      [1,2,2.5,3,3.5,4,5].forEach(v=>{
-        const k=d+(v===2.5?'25':v);if(r[k]!=null)o[k]=r[k];
-      });
-    });
+    if(r.sid!=null) o.sid=r.sid;
+    if(r.S!=null) o.S=r.S;
+    if(r.A!=null) o.A=r.A;
+    if(r.B!=null) o.B=r.B;
+    if(r.C!=null) o.C=r.C;
+    o.isReviewed=!!r.isReviewed;
     return o;
   };
   const slim={};
