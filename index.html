@@ -243,9 +243,9 @@ label{font-size:13px;color:#475569;font-weight:500}
     <button class="btn-upload" onclick="document.getElementById('fileInput').click()">
       📂 上传数据文件 (CSV / XLSX)
     </button>
-    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none">
-    <button class="btn-upload" id="btnExportSnapshot" onclick="exportSnapshot()" style="display:none;background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22)">
-      📸 导出快照
+    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.json" style="display:none">
+    <button class="btn-upload" id="btnExportData" onclick="exportDataJson()" style="display:none;background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22)">
+      💾 导出数据
     </button>
   </div>
 </div>
@@ -554,8 +554,12 @@ document.getElementById('fileInput').addEventListener('change',async function(e)
   const file=e.target.files[0];if(!file)return;
   showLoading(true);document.getElementById('fileLabel').textContent=file.name;
   try{
-    const rows=/\.(xlsx|xls)$/i.test(file.name)?await readXLSX(file):await readCSV(file);
-    if(processRows(rows)) renderAll();
+    if(/\.json$/i.test(file.name)){
+      await loadJsonData(file);
+    }else{
+      const rows=/\.(xlsx|xls)$/i.test(file.name)?await readXLSX(file):await readCSV(file);
+      if(processRows(rows)) renderAll();
+    }
   }catch(err){console.error(err);alert('文件解析失败：'+err.message);}
   showLoading(false);e.target.value='';
 });
@@ -581,7 +585,7 @@ function renderAll(){
     document.getElementById(t+'Empty').style.display='none';
     document.getElementById(t+'Main').style.display='block';
   });
-  document.getElementById('btnExportSnapshot').style.display='';
+  document.getElementById('btnExportData').style.display='';
 }
 
 // ══ OVERVIEW ══
@@ -1078,10 +1082,10 @@ function renderEntityDetail(type,id){
           backgroundColor:SCORE_LEVELS.map(s=>SCORE_COLORS[s]+'cc'),
           borderColor:SCORE_LEVELS.map(s=>SCORE_COLORS[s]),borderWidth:1,hoverOffset:4}]},
         options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
-          layout:{padding:{top:28,right:70,bottom:80,left:70}},
+          layout:{padding:{top:44,right:8,bottom:44,left:44}},
           plugins:{
-            legend:{display:true,position:'bottom',
-              labels:{boxWidth:8,boxHeight:8,font:{size:10},padding:14,
+            legend:{display:true,position:'right',
+              labels:{boxWidth:8,boxHeight:8,font:{size:10},padding:10,
                 filter:(item,data)=>data.datasets[0].data[item.index]>0}},
             tooltip:{callbacks:{label:ctx=>{const p=total?(ctx.parsed/total*100).toFixed(1):0;return`${ctx.label}: ${ctx.parsed.toLocaleString()}张 (${p}%)`;}}}  ,
             centerText:ct||null,
@@ -1251,23 +1255,26 @@ function destroyChart(id){if(chartInstances[id]){chartInstances[id].destroy();de
 function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function escAttr(s){return String(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 
-// ══ SNAPSHOT EXPORT ══
-async function exportSnapshot(){
+// ══ JSON 数据导出/导入 ══
+function exportDataJson(){
   if(!totalRows){alert('请先上传数据文件');return;}
-  let html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
-  // Strip any previous snapshot injection to avoid nesting
-  html=html.replace(/<script>window\.__SNAPSHOT__[\s\S]*?<\/script>\n?/,'');
-  html=html.replace(/<script>\/\*SNAP_INIT\*\/[\s\S]*?<\/script>\n?/,'');
-  const snap=JSON.stringify({batchStats,siteStats,totalRows,exportedAt:new Date().toISOString()});
-  const dataScr=`<script>window.__SNAPSHOT__=${snap};<\/script>`;
-  const d=new Date().toLocaleString('zh-CN');
-  const initScr=`<script>/*SNAP_INIT*/(function(){if(!window.__SNAPSHOT__)return;batchStats=__SNAPSHOT__.batchStats;siteStats=__SNAPSHOT__.siteStats;totalRows=__SNAPSHOT__.totalRows;renderAll();var ua=document.querySelector('.upload-area');if(ua)ua.innerHTML='<span style="font-size:12px;opacity:.85;color:#fff">📸 快照数据 · ${d}</span>';}());<\/script>`;
-  html=html.replace('</head>',dataScr+'\n</head>').replace('</body>',initScr+'\n</body>');
-  const fname='质检报告快照_'+new Date().toLocaleDateString('zh-CN').replace(/\//g,'-')+'.html';
+  const payload=JSON.stringify({batchStats,siteStats,totalRows,exportedAt:new Date().toISOString(),version:'1.0'});
+  const fname='质检数据_'+new Date().toLocaleDateString('zh-CN').replace(/\//g,'-')+'.json';
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));
+  a.href=URL.createObjectURL(new Blob([payload],{type:'application/json;charset=utf-8'}));
   a.download=fname;a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+async function loadJsonData(file){
+  const text=await file.text();
+  const d=JSON.parse(text);
+  if(!d.batchStats||!d.siteStats){alert('JSON 格式不正确，请使用本工具导出的数据文件');return;}
+  batchStats=d.batchStats;siteStats=d.siteStats;totalRows=d.totalRows||0;
+  renderAll();
+  if(d.exportedAt){
+    const ts=new Date(d.exportedAt).toLocaleString('zh-CN');
+    document.getElementById('fileLabel').textContent='历史数据 · '+ts;
+  }
 }
 </script>
 </body>
