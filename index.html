@@ -86,7 +86,8 @@ label{font-size:13px;color:#475569;font-weight:500}
 /* Section heads */
 .section-head{font-size:14px;font-weight:700;color:#334155;margin:24px 0 14px;padding-left:10px;border-left:3px solid #1d4ed8}
 /* Pie charts */
-.pie-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+.pie-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;position:relative}
+.pie-grid::after{content:'';position:absolute;top:8px;bottom:8px;left:50%;transform:translateX(-50%);width:1px;background:#e2e8f0;pointer-events:none}
 .pie-box{position:relative}
 .pie-label{font-size:13px;font-weight:600;color:#475569;margin-bottom:8px;text-align:center}
 .pie-h{height:300px}
@@ -427,7 +428,11 @@ Chart.register({
     if(!opts?.text) return;
     let cx,cy;
     if(chart.config.type==='radar'&&chart.scales?.r){cx=chart.scales.r.xCenter;cy=chart.scales.r.yCenter;}
-    else if(chart.config.type==='doughnut'){const ca=chart.chartArea;cx=(ca.left+ca.right)/2;cy=(ca.top+ca.bottom)/2;}
+    else if(chart.config.type==='doughnut'){
+      const meta=chart.getDatasetMeta(0);
+      if(meta.data[0]){const p=meta.data[0].getProps(['x','y'],true);cx=p.x;cy=p.y;}
+      else{const ca=chart.chartArea;cx=(ca.left+ca.right)/2;cy=(ca.top+ca.bottom)/2;}
+    }
     else return;
     const{ctx}=chart;
     ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';
@@ -1062,7 +1067,7 @@ function renderEntityDetail(type,id){
           const tot=ds.data.reduce((a,b)=>a+b,0);
           chart.ctx.save();
           meta.data.forEach((arc,i)=>{
-            if(!ds.data[i]||ds.data[i]/tot<0.04)return;
+            if(!ds.data[i]||ds.data[i]/tot<0.02)return;
             const{x,y,startAngle,endAngle,outerRadius}=arc.getProps(['x','y','startAngle','endAngle','outerRadius'],true);
             const mid=(startAngle+endAngle)/2;
             const cos=Math.cos(mid),sin=Math.sin(mid);
@@ -1090,7 +1095,7 @@ function renderEntityDetail(type,id){
             tooltip:{callbacks:{label:ctx=>{const p=total?(ctx.parsed/total*100).toFixed(1):0;return`${ctx.label}: ${ctx.parsed.toLocaleString()}张 (${p}%)`;}}}  ,
             centerText:ct||null,
             datalabels:{
-              display:(ctx)=>ctx.dataset.data[ctx.dataIndex]>0&&total>0&&ctx.dataset.data[ctx.dataIndex]/total>=0.04,
+              display:(ctx)=>ctx.dataset.data[ctx.dataIndex]>0&&total>0&&ctx.dataset.data[ctx.dataIndex]/total>=0.02,
               formatter:(value,ctx)=>{const p=total?(value/total*100).toFixed(1):0;const label=ctx.chart.data.labels[ctx.dataIndex];return`${label}(${value.toLocaleString()}张/${p}%)`;},
               color:(ctx)=>ctx.dataset.borderColor[ctx.dataIndex],
               anchor:'end',align:'end',offset:22,
