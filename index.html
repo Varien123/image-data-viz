@@ -86,11 +86,13 @@ label{font-size:13px;color:#475569;font-weight:500}
 /* Section heads */
 .section-head{font-size:14px;font-weight:700;color:#334155;margin:24px 0 14px;padding-left:10px;border-left:3px solid #1d4ed8}
 /* Pie charts */
-.pie-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;position:relative}
-.pie-grid::after{content:'';position:absolute;top:8px;bottom:8px;left:50%;transform:translateX(-50%);width:1px;background:#e2e8f0;pointer-events:none}
+.pie-grid{display:grid;grid-template-columns:repeat(2,1fr);column-gap:20px;row-gap:0;position:relative}
+.pie-grid::after{content:'';position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);width:1px;background:#e2e8f0;pointer-events:none}
+.pie-grid .pie-box:nth-child(-n+2){padding-bottom:22px;border-bottom:1px solid #e2e8f0}
+.pie-grid .pie-box:nth-child(n+3){padding-top:22px}
 .pie-box{position:relative}
 .pie-label{font-size:13px;font-weight:600;color:#475569;margin-bottom:8px;text-align:center}
-.pie-h{height:300px}
+.pie-h{height:310px}
 /* Filter panel */
 .filter-panel{display:none;flex-wrap:wrap;gap:10px;padding:12px 14px;background:#f8fafc;border-radius:8px;margin-bottom:12px;align-items:flex-end;border:1px solid #e2e8f0}
 .filter-panel.open{display:flex}
@@ -200,6 +202,11 @@ label{font-size:13px;color:#475569;font-weight:500}
   <div class="modal" id="modalBody"></div>
 </div>
 
+<!-- 历史记录面板 -->
+<div class="modal-bg" id="histBg">
+  <div class="modal" id="histBody" style="max-width:720px"></div>
+</div>
+
 <!-- Image detail overlay -->
 <div class="img-overlay" id="imgOverlay">
   <div class="img-ov-hdr">
@@ -244,9 +251,9 @@ label{font-size:13px;color:#475569;font-weight:500}
     <button class="btn-upload" onclick="document.getElementById('fileInput').click()">
       📂 上传数据文件 (CSV / XLSX)
     </button>
-    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.json" style="display:none">
-    <button class="btn-upload" id="btnExportData" onclick="exportDataJson()" style="display:none;background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22)">
-      💾 导出数据
+    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none">
+    <button class="btn-upload" onclick="openHistPanel()" style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22)">
+      🕐 历史记录
     </button>
   </div>
 </div>
@@ -421,19 +428,14 @@ let currentImgRecords=[];
 const chartInstances={};
 
 // ══ CHART PLUGINS ══
+// centerText 只处理 radar；doughnut 的中心文字由各图表的行内插件绘制（确保在 ChartDataLabels 之后）
 Chart.register({
   id:'centerText',
   afterDraw(chart){
     const opts=chart.config.options?.plugins?.centerText;
     if(!opts?.text) return;
-    let cx,cy;
-    if(chart.config.type==='radar'&&chart.scales?.r){cx=chart.scales.r.xCenter;cy=chart.scales.r.yCenter;}
-    else if(chart.config.type==='doughnut'){
-      const meta=chart.getDatasetMeta(0);
-      if(meta.data[0]){const p=meta.data[0].getProps(['x','y'],true);cx=p.x;cy=p.y;}
-      else{const ca=chart.chartArea;cx=(ca.left+ca.right)/2;cy=(ca.top+ca.bottom)/2;}
-    }
-    else return;
+    if(chart.config.type!=='radar'||!chart.scales?.r) return;
+    const cx=chart.scales.r.xCenter,cy=chart.scales.r.yCenter;
     const{ctx}=chart;
     ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.font=`bold ${opts.sz||15}px -apple-system,sans-serif`;
@@ -559,12 +561,8 @@ document.getElementById('fileInput').addEventListener('change',async function(e)
   const file=e.target.files[0];if(!file)return;
   showLoading(true);document.getElementById('fileLabel').textContent=file.name;
   try{
-    if(/\.json$/i.test(file.name)){
-      await loadJsonData(file);
-    }else{
-      const rows=/\.(xlsx|xls)$/i.test(file.name)?await readXLSX(file):await readCSV(file);
-      if(processRows(rows)) renderAll();
-    }
+    const rows=/\.(xlsx|xls)$/i.test(file.name)?await readXLSX(file):await readCSV(file);
+    if(processRows(rows)){renderAll();saveHistory(file.name);}
   }catch(err){console.error(err);alert('文件解析失败：'+err.message);}
   showLoading(false);e.target.value='';
 });
@@ -590,7 +588,6 @@ function renderAll(){
     document.getElementById(t+'Empty').style.display='none';
     document.getElementById(t+'Main').style.display='block';
   });
-  document.getElementById('btnExportData').style.display='';
 }
 
 // ══ OVERVIEW ══
@@ -1066,18 +1063,35 @@ function renderEntityDetail(type,id){
           const ds=chart.data.datasets[0];
           const tot=ds.data.reduce((a,b)=>a+b,0);
           chart.ctx.save();
+          // 绘制引导线（所有非零分段）
           meta.data.forEach((arc,i)=>{
-            if(!ds.data[i]||ds.data[i]/tot<0.02)return;
+            if(!ds.data[i])return;
             const{x,y,startAngle,endAngle,outerRadius}=arc.getProps(['x','y','startAngle','endAngle','outerRadius'],true);
             const mid=(startAngle+endAngle)/2;
             const cos=Math.cos(mid),sin=Math.sin(mid);
             chart.ctx.beginPath();
             chart.ctx.strokeStyle=ds.borderColor[i];
             chart.ctx.lineWidth=1.5;
-            chart.ctx.moveTo(x+cos*outerRadius, y+sin*outerRadius);
-            chart.ctx.lineTo(x+cos*(outerRadius+18), y+sin*(outerRadius+18));
+            chart.ctx.moveTo(x+cos*outerRadius,y+sin*outerRadius);
+            chart.ctx.lineTo(x+cos*(outerRadius+16),y+sin*(outerRadius+16));
             chart.ctx.stroke();
           });
+          // 在 ChartDataLabels 之后绘制中心文字，确保不被覆盖
+          if(ct?.text){
+            const mi=meta.data[0];
+            let cx,cy;
+            if(mi){const p=mi.getProps(['x','y'],true);cx=p.x;cy=p.y;}
+            else{const ca=chart.chartArea;cx=(ca.left+ca.right)/2;cy=(ca.top+ca.bottom)/2;}
+            chart.ctx.textAlign='center';chart.ctx.textBaseline='middle';
+            chart.ctx.font=`bold ${ct.sz||15}px -apple-system,sans-serif`;
+            chart.ctx.fillStyle=ct.color||'#1e293b';
+            chart.ctx.fillText(ct.text,cx,ct.sub?cy-9:cy);
+            if(ct.sub){
+              chart.ctx.font=`${ct.subSz||10}px -apple-system,sans-serif`;
+              chart.ctx.fillStyle='#94a3b8';
+              chart.ctx.fillText(ct.sub,cx,cy+10);
+            }
+          }
           chart.ctx.restore();
         }
       };
@@ -1087,7 +1101,7 @@ function renderEntityDetail(type,id){
           backgroundColor:SCORE_LEVELS.map(s=>SCORE_COLORS[s]+'cc'),
           borderColor:SCORE_LEVELS.map(s=>SCORE_COLORS[s]),borderWidth:1,hoverOffset:4}]},
         options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
-          layout:{padding:{top:44,right:8,bottom:44,left:44}},
+          layout:{padding:{top:52,right:52,bottom:52,left:52}},
           plugins:{
             legend:{display:true,position:'right',
               labels:{boxWidth:8,boxHeight:8,font:{size:10},padding:10,
@@ -1095,11 +1109,16 @@ function renderEntityDetail(type,id){
             tooltip:{callbacks:{label:ctx=>{const p=total?(ctx.parsed/total*100).toFixed(1):0;return`${ctx.label}: ${ctx.parsed.toLocaleString()}张 (${p}%)`;}}}  ,
             centerText:ct||null,
             datalabels:{
-              display:(ctx)=>ctx.dataset.data[ctx.dataIndex]>0&&total>0&&ctx.dataset.data[ctx.dataIndex]/total>=0.02,
-              formatter:(value,ctx)=>{const p=total?(value/total*100).toFixed(1):0;const label=ctx.chart.data.labels[ctx.dataIndex];return`${label}(${value.toLocaleString()}张/${p}%)`;},
+              display:(ctx)=>ctx.dataset.data[ctx.dataIndex]>0&&total>0,
+              formatter:(value,ctx)=>{
+                const p=total?(value/total*100).toFixed(1):0;
+                const label=ctx.chart.data.labels[ctx.dataIndex];
+                return value/total<0.03?`${label}\n${p}%`:`${label}(${value.toLocaleString()}张/${p}%)`;
+              },
               color:(ctx)=>ctx.dataset.borderColor[ctx.dataIndex],
-              anchor:'end',align:'end',offset:22,
+              anchor:'end',align:'end',offset:20,
               font:{size:9,weight:'600'},
+              textAlign:'center',
             }}}});
     });
   },50);
@@ -1260,27 +1279,101 @@ function destroyChart(id){if(chartInstances[id]){chartInstances[id].destroy();de
 function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function escAttr(s){return String(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 
-// ══ JSON 数据导出/导入 ══
-function exportDataJson(){
-  if(!totalRows){alert('请先上传数据文件');return;}
-  const payload=JSON.stringify({batchStats,siteStats,totalRows,exportedAt:new Date().toISOString(),version:'1.0'});
-  const fname='质检数据_'+new Date().toLocaleDateString('zh-CN').replace(/\//g,'-')+'.json';
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([payload],{type:'application/json;charset=utf-8'}));
-  a.download=fname;a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-}
-async function loadJsonData(file){
-  const text=await file.text();
-  const d=JSON.parse(text);
-  if(!d.batchStats||!d.siteStats){alert('JSON 格式不正确，请使用本工具导出的数据文件');return;}
-  batchStats=d.batchStats;siteStats=d.siteStats;totalRows=d.totalRows||0;
-  renderAll();
-  if(d.exportedAt){
-    const ts=new Date(d.exportedAt).toLocaleString('zh-CN');
-    document.getElementById('fileLabel').textContent='历史数据 · '+ts;
+// ══ 历史记录 ══
+const HIST_KEY='qmHistory';
+
+function saveHistory(filename){
+  // 保存时去掉 records（图片记录），节省 localStorage 空间
+  const slim={};
+  Object.entries(batchStats).forEach(([k,v])=>{
+    const{records,...rest}=v;
+    slim[k]=rest;
+  });
+  const entry={
+    id:Date.now(),
+    filename:filename||'未知文件',
+    uploadedAt:new Date().toISOString(),
+    batchStats:slim,
+    siteStats,
+    totalRows
+  };
+  let hist=getHistList();
+  hist.unshift(entry);
+  if(hist.length>10)hist.length=10;
+  try{localStorage.setItem(HIST_KEY,JSON.stringify(hist));}
+  catch(e){
+    // 存储空间不足时缩减至 5 条
+    hist.splice(5);
+    try{localStorage.setItem(HIST_KEY,JSON.stringify(hist));}catch(e2){}
   }
 }
+
+function getHistList(){
+  try{return JSON.parse(localStorage.getItem(HIST_KEY)||'[]');}catch(e){return[];}
+}
+
+function openHistPanel(){
+  const hist=getHistList();
+  const rows=hist.map(h=>{
+    const dt=new Date(h.uploadedAt).toLocaleString('zh-CN');
+    const nb=Object.keys(h.batchStats||{}).length;
+    const ns=Object.keys(h.siteStats||{}).length;
+    return`<tr>
+      <td>${escH(h.filename)}</td>
+      <td style="white-space:nowrap;font-size:12px;color:#64748b">${dt}</td>
+      <td>${(h.totalRows||0).toLocaleString()}</td>
+      <td>${nb}</td><td>${ns}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm" onclick="loadHistEntry(${h.id})">加载</button>
+        <button class="btn btn-sm" style="color:#dc2626;margin-left:4px" onclick="delHistEntry(${h.id})">删除</button>
+      </td>
+    </tr>`;
+  }).join('');
+  document.getElementById('histBody').innerHTML=`
+    <div class="modal-head">
+      <h2>🕐 历史数据记录（共 ${hist.length} 条）</h2>
+      <button class="modal-close" onclick="closeHistPanel()">✕</button>
+    </div>
+    ${hist.length?`
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th>文件名</th><th>上传时间</th><th>图片总数</th><th>批次数</th><th>站点数</th><th>操作</th>
+      </tr></thead><tbody>${rows}</tbody></table>
+    </div>
+    <p style="font-size:11px;color:#94a3b8;margin-top:10px">* 历史模式下图片列表将为空，如需查看图片请重新上传原始文件</p>
+    `:`<div class="empty"><div class="empty-icon">📋</div>
+    <div class="empty-title">暂无历史记录</div>
+    <div class="empty-desc">上传 CSV / XLSX 文件后将自动保存到历史记录</div></div>`}
+  `;
+  document.getElementById('histBg').classList.add('open');
+}
+
+function closeHistPanel(){document.getElementById('histBg').classList.remove('open');}
+
+function loadHistEntry(id){
+  const hist=getHistList();
+  const h=hist.find(x=>x.id===id);
+  if(!h)return;
+  batchStats=h.batchStats||{};
+  siteStats=h.siteStats||{};
+  totalRows=h.totalRows||0;
+  // 补充 records 空数组，防止图片相关函数报错
+  Object.values(batchStats).forEach(b=>{if(!b.records)b.records=[];});
+  const dt=new Date(h.uploadedAt).toLocaleString('zh-CN');
+  document.getElementById('fileLabel').textContent=`[历史] ${h.filename} · ${dt}`;
+  closeHistPanel();
+  renderAll();
+}
+
+function delHistEntry(id){
+  const hist=getHistList().filter(h=>h.id!==id);
+  localStorage.setItem(HIST_KEY,JSON.stringify(hist));
+  openHistPanel();
+}
+
+document.getElementById('histBg').addEventListener('click',e=>{
+  if(e.target===document.getElementById('histBg'))closeHistPanel();
+});
 </script>
 </body>
 </html>
