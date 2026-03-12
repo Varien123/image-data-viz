@@ -1649,8 +1649,27 @@ async function tryLoadPreload(){
 // 将当前数据导出为 preload.json，提交到仓库 data/ 目录后所有访客可自动加载
 function exportPreloadJson(){
   if(!totalRows){alert('请先上传数据文件');return;}
+  // 每条 record 只保留图片展示所需的关键字段，压缩体积
+  const slimRec=(r)=>{
+    const o={};
+    if(r.url) o.url=r.url;
+    if(r.site) o.site=r.site;
+    if(r.source_id) o.source_id=r.source_id;
+    if(r.s!=null) o.s=r.s;
+    if(r.reviewed!=null) o.reviewed=r.reviewed;
+    // 各维度分值（用于图片详情筛选和展示）
+    ['A','B','C'].forEach(d=>{
+      [1,2,2.5,3,3.5,4,5].forEach(v=>{
+        const k=d+(v===2.5?'25':v);if(r[k]!=null)o[k]=r[k];
+      });
+    });
+    return o;
+  };
   const slim={};
-  Object.entries(batchStats).forEach(([k,v])=>{const{records,...rest}=v;slim[k]=rest;});
+  Object.entries(batchStats).forEach(([k,v])=>{
+    const{records,...rest}=v;
+    slim[k]={...rest,records:(records||[]).map(slimRec)};
+  });
   const payload=JSON.stringify({batchStats:slim,siteStats,totalRows,exportedAt:new Date().toISOString()},null,2);
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([payload],{type:'application/json;charset=utf-8'}));
