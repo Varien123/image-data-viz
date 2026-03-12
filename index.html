@@ -128,6 +128,11 @@ label{font-size:13px;color:#475569;font-weight:500}
 .sf-item{display:flex;flex-direction:column;gap:3px}
 .sf-lbl{font-size:11px;color:#64748b}
 .sf-sel{padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;outline:none}
+.sf-title{font-size:13px;font-weight:500;color:#475569;flex-shrink:0;align-self:center}
+.sf-checks{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sf-chk{display:flex;align-items:center;gap:4px;font-size:12px;color:#475569;cursor:pointer;padding:3px 6px;border-radius:4px;border:1px solid #e2e8f0;background:#f8fafc;transition:background 0.15s ease}
+.sf-chk:hover{background:#e2e8f0}
+.sf-chk input{cursor:pointer;margin:0}
 .img-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px}
 .img-card{border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.07);cursor:pointer;transition:all .18s}
 .img-card:hover{transform:translateY(-2px);box-shadow:0 5px 14px rgba(0,0,0,.12)}
@@ -407,7 +412,7 @@ let batchPage=1, batchSortKey='qualityScore', batchSortDir=-1;
 let siteListPage=1, batchListPage=1;
 const PAGE_SIZE=20;
 let qualityViewType='batch';
-let imgDetailState={type:null,id:null,tab:'all',filters:{S:null,A:null,B:null,C:null},page:1};
+let imgDetailState={type:null,id:null,tab:'all',filterDim:null,filterVals:[],page:1};
 let currentImgRecords=[];
 const chartInstances={};
 
@@ -1042,8 +1047,29 @@ function renderEntityDetail(type,id){
       destroyChart(cid);const el=document.getElementById(cid);if(!el)return;
       const data=SCORE_LEVELS.map(s=>dist[s]||0);
       const total=data.reduce((a,b)=>a+b,0);
+      const connectorPlugin={
+        afterDraw(chart){
+          const meta=chart.getDatasetMeta(0);
+          const ds=chart.data.datasets[0];
+          const tot=ds.data.reduce((a,b)=>a+b,0);
+          chart.ctx.save();
+          meta.data.forEach((arc,i)=>{
+            if(!ds.data[i]||ds.data[i]/tot<0.04)return;
+            const{x,y,startAngle,endAngle,outerRadius}=arc.getProps(['x','y','startAngle','endAngle','outerRadius'],true);
+            const mid=(startAngle+endAngle)/2;
+            const cos=Math.cos(mid),sin=Math.sin(mid);
+            chart.ctx.beginPath();
+            chart.ctx.strokeStyle=ds.borderColor[i];
+            chart.ctx.lineWidth=1.5;
+            chart.ctx.moveTo(x+cos*outerRadius, y+sin*outerRadius);
+            chart.ctx.lineTo(x+cos*(outerRadius+18), y+sin*(outerRadius+18));
+            chart.ctx.stroke();
+          });
+          chart.ctx.restore();
+        }
+      };
       chartInstances[cid]=new Chart(el,{type:'doughnut',
-        plugins:[ChartDataLabels],
+        plugins:[ChartDataLabels,connectorPlugin],
         data:{labels:SCORE_LEVELS.map(s=>s+'分'),datasets:[{data,
           backgroundColor:SCORE_LEVELS.map(s=>SCORE_COLORS[s]+'cc'),
           borderColor:SCORE_LEVELS.map(s=>SCORE_COLORS[s]),borderWidth:1,hoverOffset:4}]},
@@ -1051,16 +1077,16 @@ function renderEntityDetail(type,id){
           layout:{padding:{top:16,right:44,bottom:4,left:44}},
           plugins:{
             legend:{display:true,position:'bottom',
-              labels:{font:{size:10},padding:6,
+              labels:{boxWidth:8,boxHeight:8,font:{size:10},padding:8,
                 filter:(item,data)=>data.datasets[0].data[item.index]>0}},
             tooltip:{callbacks:{label:ctx=>{const p=total?(ctx.parsed/total*100).toFixed(1):0;return`${ctx.label}: ${ctx.parsed.toLocaleString()}张 (${p}%)`;}}}  ,
             centerText:ct||null,
             datalabels:{
               display:(ctx)=>ctx.dataset.data[ctx.dataIndex]>0&&total>0&&ctx.dataset.data[ctx.dataIndex]/total>=0.04,
-              formatter:(value,ctx)=>{const p=total?(value/total*100).toFixed(1):0;return`${ctx.chart.data.labels[ctx.dataIndex]}\n${value.toLocaleString()}张\n${p}%`;},
-              anchor:'end',align:'end',offset:4,
+              formatter:(value,ctx)=>{const p=total?(value/total*100).toFixed(1):0;const label=ctx.chart.data.labels[ctx.dataIndex];return`${label}(${value.toLocaleString()}张/${p}%)`;},
+              color:(ctx)=>ctx.dataset.borderColor[ctx.dataIndex],
+              anchor:'end',align:'end',offset:22,
               font:{size:9,weight:'600'},
-              color:'#475569',
             }}}});
     });
   },50);
@@ -1070,7 +1096,7 @@ function toggleLqSec(id){document.getElementById(id).classList.toggle('open');}
 
 // ══ IMAGE DETAIL OVERLAY ══
 function openImgDetail(type,id){
-  imgDetailState={type,id,tab:'all',filters:{S:null,A:null,B:null,C:null},page:1};
+  imgDetailState={type,id,tab:'all',filterDim:null,filterVals:[],page:1};
   const entity=type==='site'?siteStats[id]:batchStats[id];
   const label=entity?`${type==='site'?'站点':'批次'}：${id}`:'图片详情';
   document.getElementById('imgOvTitle').textContent=label;
@@ -1086,20 +1112,33 @@ function setImgTab(tab){
   renderImgDetailContent();
 }
 
-function setImgFilter(dim,val){imgDetailState.filters[dim]=val||null;imgDetailState.page=1;renderImgDetailContent();}
-function clearImgFilters(){imgDetailState.filters={S:null,A:null,B:null,C:null};imgDetailState.page=1;
-  document.querySelectorAll('.sf-sel').forEach(s=>s.value='');renderImgDetailContent();}
+function setImgFilterDim(dim){
+  imgDetailState.filterDim=dim||null;
+  imgDetailState.filterVals=[];
+  imgDetailState.page=1;
+  renderImgDetailContent();
+}
+function toggleImgFilterVal(val){
+  const vals=imgDetailState.filterVals;
+  const idx=vals.indexOf(val);
+  if(idx>=0) vals.splice(idx,1); else vals.push(val);
+  imgDetailState.page=1;
+  renderImgDetailContent();
+}
+function clearImgFilters(){
+  imgDetailState.filterDim=null;
+  imgDetailState.filterVals=[];
+  imgDetailState.page=1;
+  renderImgDetailContent();
+}
 
 function filterImgRecords(recs){
-  const{tab,filters}=imgDetailState;
+  const{tab,filterDim,filterVals}=imgDetailState;
   let f=recs;
   if(tab==='reviewed') f=f.filter(r=>r.isReviewed);
   else if(tab==='unreviewed') f=f.filter(r=>!r.isReviewed);
-  if(tab==='reviewed'){
-    if(filters.S) f=f.filter(r=>r.S===parseFloat(filters.S));
-    if(filters.A) f=f.filter(r=>r.A===parseFloat(filters.A));
-    if(filters.B) f=f.filter(r=>r.B===parseFloat(filters.B));
-    if(filters.C) f=f.filter(r=>r.C===parseFloat(filters.C));
+  if(tab==='reviewed'&&filterDim&&filterVals.length){
+    f=f.filter(r=>filterVals.includes(r[filterDim]));
   }
   return f;
 }
@@ -1117,17 +1156,24 @@ function renderImgDetailContent(){
   // Score filters bar
   const sfBar=document.getElementById('imgScoreFiltersBar');
   if(tab==='reviewed'){
-    const opts=SCORE_LEVELS.map(s=>`<option value="${s}">${s}分</option>`).join('');
+    const{filterDim,filterVals}=imgDetailState;
+    const dimOpts=[['S','综合质量分'],['A','清晰度分'],['B','内容质量分'],['C','美学质量分']];
+    const boxes=SCORE_LEVELS.map(v=>`
+      <label class="sf-chk">
+        <input type="checkbox" value="${v}"
+          ${filterVals.includes(v)?'checked':''}
+          onchange="toggleImgFilterVal(${v})">
+        ${v}分
+      </label>`).join('');
     sfBar.innerHTML=`<div class="score-filters-bar">
-      <span style="font-size:13px;font-weight:500;color:#475569;flex-shrink:0">筛选：</span>
-      ${[['S','整体分'],['A','清晰度'],['B','内容质量'],['C','美学质量']].map(([k,l])=>
-        `<div class="sf-item"><div class="sf-lbl">${l}</div>
-        <select class="sf-sel" id="sf-${k}" onchange="setImgFilter('${k}',this.value)">
-          <option value="">全部</option>${opts}</select></div>`).join('')}
-      <button class="btn btn-sm" onclick="clearImgFilters()" style="align-self:flex-end">重置</button>
+      <span class="sf-title">筛选维度：</span>
+      <select class="sf-sel" id="sf-dim" onchange="setImgFilterDim(this.value)">
+        <option value="">请选择维度</option>
+        ${dimOpts.map(([k,l])=>`<option value="${k}"${filterDim===k?' selected':''}>${l}</option>`).join('')}
+      </select>
+      ${filterDim?`<div class="sf-checks">${boxes}</div>`:''}
+      <button class="btn btn-sm" onclick="clearImgFilters()">重置</button>
     </div>`;
-    // Restore filter values
-    ['S','A','B','C'].forEach(k=>{const el=document.getElementById('sf-'+k);if(el&&imgDetailState.filters[k])el.value=imgDetailState.filters[k];});
   }else sfBar.innerHTML='';
 
   // Image grid
